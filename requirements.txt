@@ -1,8 +1,10 @@
 sounddevice>=0.4.6
 numpy>=1.24,<2.0
 openai-whisper>=20231117
-pyttsx3>=2.90
+edge-tts>=6.1
+ddgs>=9.0
 scipy>=1.11
 requests>=2.31
 spotipy>=2.23
 psutil>=5.9
+pygame>=2.5

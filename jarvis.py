@@ -6,7 +6,7 @@ Type a message and press Enter, or type 'voice' to speak.
 """
 
 import re
-
+from search import search_web, search_news
 import input_handler
 from voice import listen_voice, speak
 from tools import (
@@ -89,6 +89,25 @@ def think(user_text: str) -> str:
         if any(a in target for a in apps_known):
             return open_app(target)
         return open_website(target)
+        # Web search
+    if text.startswith("search for ") or text.startswith("search "):
+        query = text.replace("search for", "").replace("search", "").strip()
+        if query:
+            return search_web(query)
+
+    if "search the web for " in text or "look up " in text:
+        query = text.replace("search the web for", "").replace("look up", "").strip()
+        if query:
+            return search_web(query)
+
+    if "latest news" in text or "recent news" in text or "news about" in text:
+        query = text
+        for prefix in ["latest news about", "recent news about", "news about", "latest news", "recent news"]:
+            query = query.replace(prefix, "")
+        query = query.strip("?.!,")
+        if query:
+            return search_news(query)
+        return search_news("India")
 
     # Wikipedia
     if "wikipedia" in text or text.startswith("who is ") or text.startswith("what is "):
