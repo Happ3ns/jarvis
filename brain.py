@@ -13,7 +13,7 @@ client = OpenAI(
 )
 
 # Fast, free, supports tool calling
-MODEL = "llama-3.3-70b-versatile"
+MODEL = "openai/gpt-oss-120b"
 
 SYSTEM_PROMPT = (
     "You are JARVIS, a concise voice assistant. "
