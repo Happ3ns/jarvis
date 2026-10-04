@@ -3,9 +3,16 @@
 from flask import Flask, render_template, request, jsonify
 
 from jarvis import think, QUIET_PREFIX
-from voice import listen_voice
+from voice import listen_voice, speak
 
 app = Flask(__name__)
+
+EXIT_WORDS = ["exit", "goodbye", "shut down", "quit", "stop"]
+
+
+def _is_exit(text: str) -> bool:
+    lowered = text.lower()
+    return any(w in lowered for w in EXIT_WORDS)
 
 
 @app.route("/")
@@ -21,9 +28,9 @@ def command():
     if not user_text:
         return jsonify({"error": "empty command"}), 400
 
-    # Exit signal — the frontend will shut down the session
-    if any(w in user_text.lower() for w in
-           ["exit", "goodbye", "shut down", "quit", "stop"]):
+    # Exit branch — before think()
+    if _is_exit(user_text):
+        speak("Goodbye.")
         return jsonify({
             "user": user_text,
             "reply": "Goodbye.",
@@ -35,6 +42,8 @@ def command():
     quiet = reply.startswith(QUIET_PREFIX)
     if quiet:
         reply = reply[len(QUIET_PREFIX):]
+    else:
+        speak(reply)  # server speaks through PC speakers
 
     return jsonify({
         "user": user_text,
@@ -51,15 +60,27 @@ def voice():
     if not user_text:
         return jsonify({"error": "no speech detected"}), 200
 
+    if _is_exit(user_text):
+        speak("Goodbye.")
+        return jsonify({
+            "user": user_text,
+            "reply": "Goodbye.",
+            "speak": True,
+            "exit": True,
+        })
+
     reply = think(user_text)
     quiet = reply.startswith(QUIET_PREFIX)
     if quiet:
         reply = reply[len(QUIET_PREFIX):]
+    else:
+        speak(reply)
 
     return jsonify({
         "user": user_text,
         "reply": reply,
         "speak": not quiet,
+        "exit": False,
     })
 
 

@@ -45,7 +45,6 @@
       padding: 24px;
     }
 
-    /* ---- Header ---- */
     header {
       width: 100%;
       max-width: 720px;
@@ -86,7 +85,6 @@
       50% { opacity: 0.35; }
     }
 
-    /* ---- Orb ---- */
     .orb-wrap {
       position: relative;
       width: 220px;
@@ -119,7 +117,6 @@
     .ring-2 { width: 200px; height: 200px; animation: spin 30s linear infinite reverse; border-right-color: rgba(79, 209, 255, 0.4); }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Listening state — orb pulses */
     .app.listening .orb {
       animation: breathe 1.5s ease-in-out infinite;
       box-shadow: 0 0 80px rgba(74, 222, 128, 0.5), inset 0 0 50px rgba(74, 222, 128, 0.35);
@@ -133,7 +130,6 @@
       50% { transform: scale(1.08); }
     }
 
-    /* Thinking state — orb flickers */
     .app.thinking .orb {
       animation: flicker 0.8s ease-in-out infinite;
       box-shadow: 0 0 80px rgba(250, 204, 21, 0.5), inset 0 0 50px rgba(250, 204, 21, 0.35);
@@ -147,7 +143,6 @@
       50% { opacity: 0.7; transform: scale(0.97); }
     }
 
-    /* Speaking state */
     .app.speaking .orb {
       box-shadow: 0 0 90px rgba(244, 114, 182, 0.5), inset 0 0 60px rgba(244, 114, 182, 0.3);
       background: radial-gradient(circle at 35% 30%,
@@ -156,7 +151,6 @@
         transparent 70%);
     }
 
-    /* ---- Chat transcript ---- */
     .transcript {
       width: 100%;
       max-width: 720px;
@@ -206,7 +200,6 @@
       to { opacity: 1; transform: translateY(0); }
     }
 
-    /* ---- Input ---- */
     .input-bar {
       width: 100%;
       max-width: 720px;
@@ -227,6 +220,10 @@
       transition: border-color 0.2s;
     }
     .input-bar input:focus { border-color: var(--accent-dim); }
+    .input-bar input:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
 
     .btn {
       background: var(--user-bg);
@@ -252,7 +249,6 @@
       padding: 0;
     }
 
-    /* Mic active */
     .app.listening .btn.mic {
       border-color: #4ade80;
       color: #4ade80;
@@ -300,10 +296,17 @@
     const micBtn = document.getElementById("mic-btn");
     const sendBtn = document.getElementById("send-btn");
 
+    // Rough estimate: 1 second per 14 characters of speech
+    function estimateSpeechMs(text) {
+      return Math.max(1200, Math.min(12000, text.length * 70));
+    }
+
     function setState(state) {
       app.className = "app" + (state ? " " + state : "");
       statusEl.className = "status" + (state ? " " + state : "");
-      statusText.textContent = state ? state.charAt(0).toUpperCase() + state.slice(1) : "Idle";
+      statusText.textContent = state
+        ? state.charAt(0).toUpperCase() + state.slice(1)
+        : "Idle";
     }
 
     function addMessage(who, text) {
@@ -331,24 +334,35 @@
           body: JSON.stringify({ text }),
         });
         const data = await res.json();
+
         if (data.error) {
           addMessage("JARVIS", "Error: " + data.error);
           setState("error");
           setTimeout(() => setState(""), 1500);
           return;
         }
+
         addMessage("JARVIS", data.reply);
-                if (data.exit) {
+
+        if (data.exit) {
+          // Grey out the input — session ended
           setState("speaking");
-          speakBrowser(data.reply, () => {
-            // Grey out the input after farewell
+          setTimeout(() => {
             input.disabled = true;
             sendBtn.disabled = true;
             micBtn.disabled = true;
             input.placeholder = "Session ended. Refresh to restart.";
             setState("");
-          });
+          }, estimateSpeechMs(data.reply));
           return;
+        }
+
+        if (data.speak) {
+          // The server is speaking through the PC speakers — just show state
+          setState("speaking");
+          setTimeout(() => setState(""), estimateSpeechMs(data.reply));
+        } else {
+          setState("");
         }
       } catch (e) {
         addMessage("JARVIS", "Network error: " + e.message);
@@ -365,25 +379,33 @@
       try {
         const res = await fetch("/api/voice", { method: "POST" });
         const data = await res.json();
+
         if (data.error) {
           addMessage("JARVIS", data.error);
           setState("");
           return;
         }
-        // Remove "Listening..." line by replacing it
+
         addMessage("You", data.user);
         addMessage("JARVIS", data.reply);
-                if (data.exit) {
+
+        if (data.exit) {
           setState("speaking");
-          speakBrowser(data.reply, () => {
-            // Grey out the input after farewell
+          setTimeout(() => {
             input.disabled = true;
             sendBtn.disabled = true;
             micBtn.disabled = true;
             input.placeholder = "Session ended. Refresh to restart.";
             setState("");
-          });
+          }, estimateSpeechMs(data.reply));
           return;
+        }
+
+        if (data.speak) {
+          setState("speaking");
+          setTimeout(() => setState(""), estimateSpeechMs(data.reply));
+        } else {
+          setState("");
         }
       } catch (e) {
         addMessage("JARVIS", "Voice error: " + e.message);
@@ -394,27 +416,6 @@
       }
     }
 
-    function speakBrowser(text, onDone) {
-      // Use Web Speech API for a natural voice in the browser
-      if (!("speechSynthesis" in window)) {
-        onDone();
-        return;
-      }
-      window.speechSynthesis.cancel();
-      const utter = new SpeechSynthesisUtterance(text);
-      utter.rate = 1.0;
-      utter.pitch = 0.95;
-      const voices = window.speechSynthesis.getVoices();
-      const preferred = voices.find(v => v.name.includes("Google UK English Male"))
-                     || voices.find(v => v.name.includes("Daniel"))
-                     || voices.find(v => v.lang === "en-GB")
-                     || voices[0];
-      if (preferred) utter.voice = preferred;
-      utter.onend = onDone;
-      utter.onerror = onDone;
-      window.speechSynthesis.speak(utter);
-    }
-
     input.addEventListener("keydown", (e) => {
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
@@ -423,12 +424,6 @@
     });
     sendBtn.addEventListener("click", () => sendCommand(input.value));
     micBtn.addEventListener("click", triggerVoice);
-
-    // Preload voices (Chrome needs this)
-    if ("speechSynthesis" in window) {
-      window.speechSynthesis.getVoices();
-      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
-    }
 
     input.focus();
   </script>
