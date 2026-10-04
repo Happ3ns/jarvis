@@ -114,20 +114,22 @@ def think(user_text: str) -> str:
 
 
 def main():
-    speak("JARVIS online.")
+    speak("JARVIS online. Type a message, or type 'voice' to speak.")
+    input_handler.start()  # no arguments needed
     try:
         while True:
-            user_text = listen()
-            if not user_text:
+            item = input_handler.get()
+            if item is None:
                 continue
-            if any(w in user_text.lower() for w in
-                   ["exit", "goodbye", "shut down", "stop", "quit"]):
-                speak("Shutting down.")
-                break
-            reply = think(user_text)
-            speak(reply)
-    except KeyboardInterrupt:
-        speak("Interrupted. Goodbye.")
+            source, text = item
+
+            if source == "voice":
+                speak("Listening...")
+                user_text = listen_voice()
+            else:
+                print(f"You (typed): {text}")
+                user_text = text
+            # ... rest stays the same
 
 
 if __name__ == "__main__":
