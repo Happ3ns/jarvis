@@ -3,6 +3,9 @@ import numpy as np
 import whisper
 import pyttsx3
 import requests
+import subprocess
+import os
+import webbrowser
 from datetime import datetime
 
 SAMPLE_RATE = 16000
@@ -23,7 +26,6 @@ for v in tts.getProperty("voices"):
 # ---------- Tools ----------
 
 def get_weather(city: str) -> str:
-    """Fetch current weather for a city via open-meteo (no API key needed)."""
     try:
         geo = requests.get(
             "https://geocoding-api.open-meteo.com/v1/search",
@@ -32,11 +34,9 @@ def get_weather(city: str) -> str:
         ).json()
         if not geo.get("results"):
             return f"I couldn't find {city}."
-
         lat = geo["results"][0]["latitude"]
         lon = geo["results"][0]["longitude"]
         name = geo["results"][0]["name"]
-
         weather = requests.get(
             "https://api.open-meteo.com/v1/forecast",
             params={"latitude": lat, "longitude": lon, "current_weather": True},
@@ -54,6 +54,168 @@ def get_time() -> str:
 
 def get_date() -> str:
     return datetime.now().strftime("Today is %A, %B %d, %Y.")
+
+
+def open_app(app_name: str) -> str:
+    apps = {
+        "spotify":  os.path.expandvars(r"%APPDATA%\Spotify\Spotify.exe"),
+        "chrome":   r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+        "edge":     r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+        "notepad":  "notepad.exe",
+        "calculator": "calc.exe",
+        "explorer": "explorer.exe",
+        "cmd":      "cmd.exe",
+        "vscode":   os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe"),
+    }
+    name = app_name.lower().strip()
+    if name in apps:
+        try:
+            subprocess.Popen(apps[name])
+            return f"Opening {app_name}."
+        except FileNotFoundError:
+            return f"Found '{app_name}', but the executable isn't at the expected path."
+    for key in apps:
+        if key in name:
+            try:
+                subprocess.Popen(apps[key])
+                return f"Opening {key}."
+            except FileNotFoundError:
+                return f"Found '{key}', but the executable isn't at the expected path."
+    return f"I don't know how to open {app_name} yet."
+def search_wikipedia(query: str) -> str:
+    """Fetch a short summary of a Wikipedia article."""
+    from urllib.parse import quote
+
+    headers = {
+        "User-Agent": "JARVIS/0.1 (personal voice assistant; contact: akshatkharkwal39@gmail.com)"
+    }
+
+    try:
+        # Find the top matching article titles
+        search = requests.get(
+            "https://en.wikipedia.org/w/api.php",
+            params={
+                "action": "opensearch",
+                "search": query,
+                "limit": 5,           # grab a few, not just one
+                "format": "json",
+            },
+            headers=headers,
+            timeout=5,
+        ).json()
+
+        candidates = search[1]
+        if not candidates:
+            return f"I couldn't find a Wikipedia article for {query}."
+
+        # Try each candidate until we find one that isn't a disambiguation page
+        for title in candidates:
+            summary = requests.get(
+                f"https://en.wikipedia.org/api/rest_v1/page/summary/{quote(title)}",
+                headers=headers,
+                timeout=5,
+            ).json()
+
+            if summary.get("type") == "disambiguation":
+                continue  # skip and try the next one
+
+            extract = summary.get("extract", "")
+            if extract:
+                sentences = extract.split(". ")
+                short = ". ".join(sentences[:2]).strip()
+                if not short.endswith("."):
+                    short += "."
+                return f"According to Wikipedia: {short}"
+
+        return f"'{candidates[0]}' is ambiguous — try being more specific."
+
+    except Exception as e:
+        return f"Sorry, I couldn't search Wikipedia. Error: {e}"
+def open_website(site: str) -> str:
+    """Open a website in the default browser."""
+    # Common site shortcuts
+    shortcuts = {
+        "youtube": "https://www.youtube.com",
+        "gmail":   "https://mail.google.com",
+        "github":  "https://github.com",
+        "reddit":  "https://www.reddit.com",
+        "twitter": "https://twitter.com",
+        "x":       "https://x.com",
+        "stackoverflow": "https://stackoverflow.com",
+        "wikipedia": "https://en.wikipedia.org",
+        "google": "https://www.google.com",
+    }
+
+    name = site.lower().strip().replace(" ", "")
+
+    # If it's a known shortcut, use it
+    if name in shortcuts:
+        webbrowser.open(shortcuts[name])
+        return f"Opening {site}."
+
+    # Otherwise, try to construct a URL
+    if "." in name:
+        url = name if name.startswith("http") else f"https://{name}"
+        webbrowser.open(url)
+        return f"Opening {site}."
+
+    # Fall back to a Google search for unknown names
+    webbrowser.open(f"https://www.google.com/search?q={site}")
+    return f"I didn't recognize {site}, so I searched for it on Google."
+
+
+# ---------- Spotify (needs setup — see README) ----------
+
+_spotify_client = None
+
+def get_spotify_client():
+    """Lazy-init Spotify client. Returns None if not configured."""
+    global _spotify_client
+    if _spotify_client is not None:
+        return _spotify_client
+
+    try:
+        import spotipy
+        from spotipy.oauth2 import SpotifyOAuth
+
+        client_id = os.environ.get("SPOTIFY_CLIENT_ID")
+        client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
+
+        if not client_id or not client_secret:
+            return None
+
+        _spotify_client = spotipy.Spotify(auth_manager=SpotifyOAuth(
+            client_id=client_id,
+            client_secret=client_secret,
+            redirect_uri="http://localhost:8888/callback",
+            scope="user-modify-playback-state user-read-playback-state",
+        ))
+        return _spotify_client
+    except Exception:
+        return None
+
+
+def play_on_spotify(query: str) -> str:
+    sp = get_spotify_client()
+    if sp is None:
+        return ("Spotify isn't set up yet. See the README for the developer "
+                "account setup steps.")
+
+    try:
+        results = sp.search(q=query, limit=1, type="track")
+        items = results["tracks"]["items"]
+        if not items:
+            return f"Couldn't find {query} on Spotify."
+
+        track = items[0]
+        uri = track["uri"]
+        name = track["name"]
+        artist = track["artists"][0]["name"]
+
+        sp.start_playback(uris=[uri])
+        return f"Playing {name} by {artist}."
+    except Exception as e:
+        return f"Spotify error: {e}. Make sure Spotify is open and you have Premium."
 
 
 # ---------- Voice I/O ----------
@@ -74,15 +236,11 @@ def listen_voice() -> str:
                    dtype="float32", device=DEVICE)
     sd.wait()
     audio = trim_silence(audio.flatten())
-
     if len(audio) < SAMPLE_RATE * 0.3:
         print("[Too short — nothing captured]")
         return ""
-
     result = whisper_model.transcribe(
-        audio,
-        fp16=False,
-        language="en",
+        audio, fp16=False, language="en",
         condition_on_previous_text=False,
         no_speech_threshold=0.6,
     )
@@ -92,7 +250,6 @@ def listen_voice() -> str:
 
 
 def listen() -> str:
-    """Type a message, or press Enter to use voice."""
     typed = input("\n[Type a message, or press Enter to speak]: ").strip()
     if typed:
         print(f"You (typed): {typed}")
@@ -100,11 +257,38 @@ def listen() -> str:
     return listen_voice()
 
 
-# ---------- Brain (temporary — swaps to Claude on Oct 22) ----------
+# ---------- Brain ----------
 
 def think(user_text: str) -> str:
     text = user_text.lower()
 
+    # Spotify playback (check before generic "open")
+    if "play" in text and "spotify" not in text.replace("on spotify", ""):
+        # "play X on spotify" or "play X"
+        query = text.replace("play", "").replace("on spotify", "").strip()
+        if query:
+            return play_on_spotify(query)
+
+    # Open app
+    if text.startswith("open ") or "open up" in text:
+        target = text.replace("open up", "").replace("open", "").strip()
+        # Is it an app or a website?
+        apps_known = ["spotify", "chrome", "edge", "notepad", "calculator",
+                      "explorer", "cmd", "vscode"]
+        if any(a in target for a in apps_known):
+            return open_app(target)
+        return open_website(target)
+
+    # Wikipedia
+    if "wikipedia" in text or text.startswith("who is ") or text.startswith("what is "):
+        query = user_text
+        for prefix in ["wikipedia", "who is", "what is", "tell me about"]:
+            query = query.lower().replace(prefix, "")
+        query = query.strip("?.!,")
+        if query:
+            return search_wikipedia(query)
+
+    # Weather
     if "weather" in text:
         words = user_text.split()
         for i, w in enumerate(words):
@@ -112,9 +296,9 @@ def think(user_text: str) -> str:
                 return get_weather(words[i + 1].strip("?.!,"))
         return get_weather("Kanpur")
 
+    # Time / date
     if "time" in text:
         return get_time()
-
     if "date" in text or "day" in text:
         return get_date()
 
