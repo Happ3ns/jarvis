@@ -1,8 +1,10 @@
-"""Voice I/O — listening (Whisper) and speaking (edge-tts)."""
+"""Voice I/O — listening (Whisper) and speaking (edge-tts + winsound)."""
 
 import asyncio
 import os
+import subprocess
 import tempfile
+import winsound
 
 import sounddevice as sd
 import numpy as np
@@ -13,9 +15,8 @@ SAMPLE_RATE = 16000
 DEVICE = 11
 DURATION = 5
 
-# edge-tts voice — en-US-AndrewNeural is rated one of the most natural male voices
 EDGE_VOICE = "en-US-AndrewNeural"
-EDGE_RATE = "-5%"   # slight slowdown sounds more human
+EDGE_RATE = "-5%"
 EDGE_PITCH = "+0Hz"
 
 print("Loading Whisper...")
@@ -51,52 +52,59 @@ def listen_voice() -> str:
     return text
 
 
-async def _speak_async(text: str) -> None:
-    """Generate speech with edge-tts and play it."""
-    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-        path = f.name
+async def _generate_mp3(text: str, path: str) -> None:
+    communicate = edge_tts.Communicate(
+        text, EDGE_VOICE, rate=EDGE_RATE, pitch=EDGE_PITCH
+    )
+    await communicate.save(path)
 
+
+def _mp3_to_wav(mp3_path: str, wav_path: str) -> bool:
+    """Convert mp3 → wav using ffmpeg. Returns True on success."""
     try:
-        communicate = edge_tts.Communicate(
-            text, EDGE_VOICE, rate=EDGE_RATE, pitch=EDGE_PITCH
-        )
-        await communicate.save(path)
-        _play_mp3(path)
-    finally:
-        try:
-            os.unlink(path)
-        except OSError:
-            pass
-
-
-def _play_mp3(path: str) -> None:
-    """Play an mp3 file on Windows."""
-    import winsound
-    # winsound can't play mp3 — use the OS default player via subprocess
-    # For mp3, we'll use the Windows Media Player COM or simple os.startfile
-    # Simplest reliable way: use pygame mixer if available, else os.startfile
-    try:
-        import pygame
-        pygame.mixer.init()
-        pygame.mixer.music.load(path)
-        pygame.mixer.music.play()
-        while pygame.mixer.music.get_busy():
-            pygame.time.Clock().tick(30)
-        pygame.mixer.quit()
-    except ImportError:
-        # Fallback: use PowerShell to play the file and wait
-        import subprocess
-        subprocess.run(
-            ["powershell", "-c",
-             f"(New-Object Media.SoundPlayer '{path}').PlaySync();"],
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-i", mp3_path, wav_path],
             capture_output=True,
+            timeout=15,
         )
+        return result.returncode == 0 and os.path.exists(wav_path)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return False
 
 
 def speak(text: str) -> None:
-    """Convert text to speech and play it."""
     print(f"JARVIS: {text}")
+
+    mp3_path = None
+    wav_path = None
     try:
-        asyncio.run(_speak_async(text))
+        # Generate MP3 with edge-tts
+        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+            mp3_path = f.name
+        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+            wav_path = f.name
+
+        asyncio.run(_generate_mp3(text, mp3_path))
+
+        # Convert to WAV so winsound can play it
+        if _mp3_to_wav(mp3_path, wav_path):
+            winsound.PlaySound(wav_path, winsound.SND_FILENAME)
+        else:
+            # Fallback: use PowerShell MediaPlayer for MP3
+            subprocess.run(
+                ["powershell", "-c",
+                 f"Add-Type -AssemblyName presentationCore; "
+                 f"$p = New-Object System.Windows.Media.MediaPlayer; "
+                 f"$p.Open([Uri]'{mp3_path}'); "
+                 f"$p.Play(); Start-Sleep -Seconds 5"],
+                capture_output=True,
+            )
     except Exception as e:
         print(f"[TTS error: {e}]")
+    finally:
+        for p in (mp3_path, wav_path):
+            if p:
+                try:
+                    os.unlink(p)
+                except OSError:
+                    pass
