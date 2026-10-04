@@ -1,6 +1,10 @@
-__pycache__/
+pycache/
 *.pyc
 *.wav
 .venv/
 venv/
 .env
+notes.txt
+.cache
+token.json
+
