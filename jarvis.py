@@ -182,24 +182,25 @@ def get_spotify_client():
         client_secret = os.environ.get("SPOTIFY_CLIENT_SECRET")
 
         if not client_id or not client_secret:
+            print("[Spotify: missing CLIENT_ID or CLIENT_SECRET env vars]")
             return None
 
         _spotify_client = spotipy.Spotify(auth_manager=SpotifyOAuth(
             client_id=client_id,
             client_secret=client_secret,
-            redirect_uri="http://localhost:8888/callback",
+            redirect_uri="http://127.0.0.1:8888/callback",
             scope="user-modify-playback-state user-read-playback-state",
         ))
         return _spotify_client
-    except Exception:
+    except Exception as e:
+        print(f"[Spotify init failed: {e}]")
         return None
 
 
 def play_on_spotify(query: str) -> str:
     sp = get_spotify_client()
     if sp is None:
-        return ("Spotify isn't set up yet. See the README for the developer "
-                "account setup steps.")
+        return "Spotify isn't set up yet."
 
     try:
         results = sp.search(q=query, limit=1, type="track")
@@ -212,11 +213,58 @@ def play_on_spotify(query: str) -> str:
         name = track["name"]
         artist = track["artists"][0]["name"]
 
-        sp.start_playback(uris=[uri])
-        return f"Playing {name} by {artist}."
-    except Exception as e:
-        return f"Spotify error: {e}. Make sure Spotify is open and you have Premium."
+        import time
 
+        # Find a usable device — skip Echo/Alexa, prefer active
+        devices = sp.devices().get("devices", [])
+
+        def usable(d):
+            """Echo dots have buggy IDs that return 404."""
+            name = d.get("name", "").lower()
+            if "echo" in name or "alexa" in name or "_amzn_" in d.get("id", ""):
+                return False
+            return True
+
+        # Prefer an active device
+        chosen = next((d for d in devices if d.get("is_active") and usable(d)), None)
+
+        # Fall back to any non-Echo device
+        if chosen is None:
+            chosen = next((d for d in devices if usable(d)), None)
+
+        # If nothing usable, launch Spotify desktop and wait
+        if chosen is None:
+            print("[No usable device — launching Spotify desktop...]")
+            subprocess.Popen(os.path.expandvars(r"%APPDATA%\Spotify\Spotify.exe"))
+
+            for attempt in range(10):
+                time.sleep(2)
+                devices = sp.devices().get("devices", [])
+                chosen = next((d for d in devices if usable(d)), None)
+                if chosen:
+                    print(f"[Spotify ready after {(attempt + 1) * 2}s]")
+                    break
+
+            if chosen is None:
+                return ("No playable Spotify device found. Open the Spotify "
+                        "desktop app manually first, then try again.")
+
+        device_id = chosen["id"]
+        device_name = chosen.get("name", "unknown")
+        print(f"[Using device: {device_name}]")
+
+        # Ensure this device is active before playing
+        try:
+            sp.transfer_playback(device_id, force_play=False)
+            time.sleep(0.5)
+        except Exception as e:
+            print(f"[Transfer warning: {e}]")
+
+        sp.start_playback(device_id=device_id, uris=[uri])
+        return f"Playing {name} by {artist}."
+
+    except Exception as e:
+        return f"Spotify error: {e}"
 
 # ---------- Voice I/O ----------
 
