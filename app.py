@@ -4,6 +4,7 @@ from flask import Flask, render_template, request, jsonify
 
 from jarvis import think, QUIET_PREFIX
 from voice import listen_voice, speak
+from advanced import remember
 
 app = Flask(__name__)
 
@@ -28,7 +29,7 @@ def command():
     if not user_text:
         return jsonify({"error": "empty command"}), 400
 
-    # Exit branch — before think()
+    # Exit branch — checked before think() so "goodbye" doesn't fall through
     if _is_exit(user_text):
         speak("Goodbye.")
         return jsonify({
@@ -44,6 +45,9 @@ def command():
         reply = reply[len(QUIET_PREFIX):]
     else:
         speak(reply)  # server speaks through PC speakers
+
+    # Log exchange into conversation memory
+    remember(user_text, reply)
 
     return jsonify({
         "user": user_text,
@@ -75,6 +79,8 @@ def voice():
         reply = reply[len(QUIET_PREFIX):]
     else:
         speak(reply)
+
+    remember(user_text, reply)
 
     return jsonify({
         "user": user_text,

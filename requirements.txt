@@ -8,3 +8,5 @@ requests>=2.31
 spotipy>=2.23
 psutil>=5.9
 flask>=3.0
+pyperclip>=1.8
+pyautogui>=0.9.54
