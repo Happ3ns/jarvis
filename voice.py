@@ -51,9 +51,9 @@ def listen_voice() -> str:
         print("[Too short — nothing captured]")
         return ""
     result = whisper_model.transcribe(
-        audio, fp16=False, language="en",
-        condition_on_previous_text=False,
-        no_speech_threshold=0.6,
+    audio, fp16=False,
+    condition_on_previous_text=False,
+    no_speech_threshold=0.6,
     )
     text = result["text"].strip()
     print(f"You (voice): {text}")

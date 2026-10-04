@@ -212,8 +212,11 @@ def play_on_spotify(query: str) -> str:
     if sp is None:
         return "Spotify isn't set up yet."
     try:
-        results = sp.search(q=query, limit=1, type="track")
+        print(f"[Spotify search: '{query}']")
+        results = sp.search(q=query, limit=5, type="track", market="IN")
         items = results["tracks"]["items"]
+        if items:
+            items = sorted(items, key=lambda t: t.get("popularity", 0), reverse=True)
         if not items:
             return f"Couldn't find {query} on Spotify."
         track = items[0]
