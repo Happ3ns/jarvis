@@ -49,14 +49,6 @@ def listen_voice() -> str:
     return text
 
 
-def listen() -> str:
-    typed = input("\n[Type a message, or press Enter to speak]: ").strip()
-    if typed:
-        print(f"You (typed): {typed}")
-        return typed
-    return listen_voice()
-
-
 def speak(text: str) -> None:
     print(f"JARVIS: {text}")
     tts.say(text)

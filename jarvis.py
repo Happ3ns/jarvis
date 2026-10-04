@@ -1,11 +1,14 @@
 """JARVIS — voice assistant entry point.
 
 Run with: python jarvis.py
+
+Type a message and press Enter, or type 'voice' to speak.
 """
 
 import re
 
-from voice import listen, speak
+import input_handler
+from voice import listen_voice, speak
 from tools import (
     get_weather, get_time, get_date, get_system_info, get_ip,
     open_app, open_website,
@@ -101,7 +104,7 @@ def think(user_text: str) -> str:
         words = user_text.split()
         for i, w in enumerate(words):
             if w.lower() in ("in", "for") and i + 1 < len(words):
-                return get_weather(words[i + 1].strip("?.!,"))
+                return get_weather(words[i + 1].strip("?.!,",))
         return get_weather("Kanpur")
 
     # Time / date — word boundaries matter
@@ -115,12 +118,13 @@ def think(user_text: str) -> str:
 
 def main():
     speak("JARVIS online. Type a message, or type 'voice' to speak.")
-    input_handler.start()  # no arguments needed
+    input_handler.start()  # no wake word needed — uses keyboard trigger
     try:
         while True:
             item = input_handler.get()
             if item is None:
                 continue
+
             source, text = item
 
             if source == "voice":
@@ -129,7 +133,22 @@ def main():
             else:
                 print(f"You (typed): {text}")
                 user_text = text
-            # ... rest stays the same
+
+            if not user_text:
+                continue
+
+            if any(w in user_text.lower() for w in
+                   ["exit", "goodbye", "shut down", "quit"]):
+                speak("Shutting down.")
+                break
+
+            reply = think(user_text)
+            speak(reply)
+
+    except KeyboardInterrupt:
+        speak("Interrupted. Goodbye.")
+    finally:
+        input_handler.stop()
 
 
 if __name__ == "__main__":
