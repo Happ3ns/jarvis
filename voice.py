@@ -4,6 +4,8 @@ import asyncio
 import os
 import subprocess
 import tempfile
+import threading
+import time
 import winsound
 
 import sounddevice as sd
@@ -19,6 +21,9 @@ EDGE_VOICE = "en-US-AndrewNeural"
 EDGE_RATE = "-5%"
 EDGE_PITCH = "+0Hz"
 
+# Serialize speak() calls — prevents overlapping playback
+_speak_lock = threading.Lock()
+
 print("Loading Whisper...")
 whisper_model = whisper.load_model("base")
 
@@ -33,6 +38,9 @@ def trim_silence(audio, threshold=0.01):
 
 
 def listen_voice() -> str:
+    # Wait a moment so JARVIS's own speaker output dies down
+    time.sleep(0.5)
+
     print("[Listening... speak now]")
     audio = sd.rec(int(DURATION * SAMPLE_RATE),
                    samplerate=SAMPLE_RATE, channels=1,
@@ -60,7 +68,6 @@ async def _generate_mp3(text: str, path: str) -> None:
 
 
 def _mp3_to_wav(mp3_path: str, wav_path: str) -> bool:
-    """Convert mp3 → wav using ffmpeg. Returns True on success."""
     try:
         result = subprocess.run(
             ["ffmpeg", "-y", "-i", mp3_path, wav_path],
@@ -72,39 +79,40 @@ def _mp3_to_wav(mp3_path: str, wav_path: str) -> bool:
         return False
 
 
-def speak(text: str) -> None:
+def speak(text: str, quiet: bool = False) -> None:
+    """Convert text to speech and play it.
+
+    quiet=True  → print only, no audio (used for 'Playing X' confirmations)
+    """
     print(f"JARVIS: {text}")
 
-    mp3_path = None
-    wav_path = None
-    try:
-        # Generate MP3 with edge-tts
-        with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
-            mp3_path = f.name
-        with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
-            wav_path = f.name
+    if quiet:
+        return
 
-        asyncio.run(_generate_mp3(text, mp3_path))
+    with _speak_lock:
+        mp3_path = None
+        wav_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                mp3_path = f.name
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                wav_path = f.name
 
-        # Convert to WAV so winsound can play it
-        if _mp3_to_wav(mp3_path, wav_path):
-            winsound.PlaySound(wav_path, winsound.SND_FILENAME)
-        else:
-            # Fallback: use PowerShell MediaPlayer for MP3
-            subprocess.run(
-                ["powershell", "-c",
-                 f"Add-Type -AssemblyName presentationCore; "
-                 f"$p = New-Object System.Windows.Media.MediaPlayer; "
-                 f"$p.Open([Uri]'{mp3_path}'); "
-                 f"$p.Play(); Start-Sleep -Seconds 5"],
-                capture_output=True,
-            )
-    except Exception as e:
-        print(f"[TTS error: {e}]")
-    finally:
-        for p in (mp3_path, wav_path):
-            if p:
+            asyncio.run(_generate_mp3(text, mp3_path))
+
+            if _mp3_to_wav(mp3_path, wav_path):
                 try:
-                    os.unlink(p)
-                except OSError:
-                    pass
+                    winsound.PlaySound(wav_path, winsound.SND_FILENAME)
+                except Exception as e:
+                    print(f"[audio playback error: {e}]")
+            else:
+                print("[voice: ffmpeg conversion failed — text only]")
+        except Exception as e:
+            print(f"[TTS error: {e}]")
+        finally:
+            for p in (mp3_path, wav_path):
+                if p:
+                    try:
+                        os.unlink(p)
+                    except OSError:
+                        pass

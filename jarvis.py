@@ -6,7 +6,7 @@ Type a message and press Enter, or type 'voice' to speak.
 """
 
 import re
-from search import search_web, search_news
+
 import input_handler
 from voice import listen_voice, speak
 from tools import (
@@ -17,6 +17,10 @@ from tools import (
     calculate, set_timer, take_note, read_notes,
     flip_coin, roll_dice,
 )
+from search import search_web, search_news
+
+
+QUIET_PREFIX = "__QUIET__"
 
 
 def think(user_text: str) -> str:
@@ -61,6 +65,25 @@ def think(user_text: str) -> str:
     if "random fact" in text or "something random" in text or "random article" in text:
         return random_wikipedia()
 
+    # Web search — must come before Wikipedia so "search for X" doesn't hit Wikipedia
+    if text.startswith("search for ") or text.startswith("search "):
+        query = text.replace("search for", "", 1).replace("search", "", 1).strip()
+        if query:
+            return search_web(query)
+
+    if "search the web for " in text or "look up " in text:
+        query = text.replace("search the web for", "", 1).replace("look up", "", 1).strip()
+        if query:
+            return search_web(query)
+
+    if any(p in text for p in ["latest news", "recent news", "news about"]):
+        query = text
+        for prefix in ["latest news about", "recent news about", "news about",
+                       "latest news", "recent news"]:
+            query = query.replace(prefix, "", 1)
+        query = query.strip("?.!,")
+        return search_news(query if query else "India")
+
     # Calculator
     calc_triggers = ["what's", "whats", "what is", "calculate", "how much is", "compute"]
     has_trigger = any(text.startswith(t) for t in calc_triggers)
@@ -75,45 +98,29 @@ def think(user_text: str) -> str:
                 break
         return calculate(expr)
 
-    # Spotify
+    # Spotify playback — mark with quiet prefix so TTS doesn't talk over music
     if text.startswith("play ") and len(text) > 5:
-        query = text.replace("play", "").replace("on spotify", "").strip()
+        query = text.replace("play", "", 1).replace("on spotify", "").strip()
         if query and query not in ("music", "a song", "something", "spotify"):
-            return play_on_spotify(query)
+            result = play_on_spotify(query)
+            if result.startswith("Playing "):
+                return QUIET_PREFIX + result
+            return result
 
     # Open app or website
     if text.startswith("open ") or "open up" in text:
-        target = text.replace("open up", "").replace("open", "").strip()
+        target = text.replace("open up", "", 1).replace("open", "", 1).strip()
         apps_known = ["spotify", "chrome", "edge", "notepad", "calculator",
                       "explorer", "cmd", "vscode"]
         if any(a in target for a in apps_known):
             return open_app(target)
         return open_website(target)
-        # Web search
-    if text.startswith("search for ") or text.startswith("search "):
-        query = text.replace("search for", "").replace("search", "").strip()
-        if query:
-            return search_web(query)
-
-    if "search the web for " in text or "look up " in text:
-        query = text.replace("search the web for", "").replace("look up", "").strip()
-        if query:
-            return search_web(query)
-
-    if "latest news" in text or "recent news" in text or "news about" in text:
-        query = text
-        for prefix in ["latest news about", "recent news about", "news about", "latest news", "recent news"]:
-            query = query.replace(prefix, "")
-        query = query.strip("?.!,")
-        if query:
-            return search_news(query)
-        return search_news("India")
 
     # Wikipedia
     if "wikipedia" in text or text.startswith("who is ") or text.startswith("what is "):
         query = user_text
         for prefix in ["wikipedia", "who is", "what is", "tell me about"]:
-            query = query.lower().replace(prefix, "")
+            query = query.lower().replace(prefix, "", 1)
         query = query.strip("?.!,")
         if query:
             return search_wikipedia(query)
@@ -123,7 +130,7 @@ def think(user_text: str) -> str:
         words = user_text.split()
         for i, w in enumerate(words):
             if w.lower() in ("in", "for") and i + 1 < len(words):
-                return get_weather(words[i + 1].strip("?.!,",))
+                return get_weather(words[i + 1].strip("?.!,"))
         return get_weather("Kanpur")
 
     # Time / date — word boundaries matter
@@ -135,9 +142,17 @@ def think(user_text: str) -> str:
     return f"I heard you say: {user_text}. I don't have a tool for that yet."
 
 
+def handle_reply(reply: str) -> None:
+    """Speak or print based on whether the reply is marked quiet."""
+    if reply.startswith(QUIET_PREFIX):
+        speak(reply[len(QUIET_PREFIX):], quiet=True)
+    else:
+        speak(reply)
+
+
 def main():
     speak("JARVIS online. Type a message, or type 'voice' to speak.")
-    input_handler.start()  # no wake word needed — uses keyboard trigger
+    input_handler.start()
     try:
         while True:
             item = input_handler.get()
@@ -162,7 +177,7 @@ def main():
                 break
 
             reply = think(user_text)
-            speak(reply)
+            handle_reply(reply)
 
     except KeyboardInterrupt:
         speak("Interrupted. Goodbye.")
