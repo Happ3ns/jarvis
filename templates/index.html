@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>JARVIS</title>
+  <style>
+    :root {
+      --bg: #06070b;
+      --fg: #e5f2ff;
+      --accent: #4fd1ff;
+      --accent-dim: #1a5f7a;
+      --user-bg: #0e1a24;
+      --jarvis-bg: #0a1420;
+      --border: #142432;
+      --muted: #6b8499;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+      overflow: hidden;
+    }
+
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 50% 30%, rgba(79, 209, 255, 0.08) 0%, transparent 50%),
+        radial-gradient(circle at 80% 80%, rgba(79, 209, 255, 0.04) 0%, transparent 50%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .app {
+      position: relative;
+      z-index: 1;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 24px;
+    }
+
+    /* ---- Header ---- */
+    header {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .brand {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.3em;
+      color: var(--accent);
+      text-transform: uppercase;
+    }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .status.listening .status-dot { background: #4ade80; box-shadow: 0 0 12px #4ade80; }
+    .status.thinking  .status-dot { background: #facc15; box-shadow: 0 0 12px #facc15; }
+    .status.speaking  .status-dot { background: #f472b6; box-shadow: 0 0 12px #f472b6; }
+    .status.error     .status-dot { background: #ef4444; box-shadow: 0 0 12px #ef4444; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.35; }
+    }
+
+    /* ---- Orb ---- */
+    .orb-wrap {
+      position: relative;
+      width: 220px;
+      height: 220px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 8px 0 32px;
+    }
+    .orb {
+      width: 120px;
+      height: 120px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%,
+        rgba(79, 209, 255, 0.55) 0%,
+        rgba(79, 209, 255, 0.15) 45%,
+        transparent 70%);
+      box-shadow:
+        0 0 60px rgba(79, 209, 255, 0.35),
+        inset 0 0 40px rgba(79, 209, 255, 0.25);
+      transition: all 0.4s ease;
+    }
+    .ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid rgba(79, 209, 255, 0.15);
+      pointer-events: none;
+    }
+    .ring-1 { width: 160px; height: 160px; animation: spin 20s linear infinite; border-top-color: var(--accent); }
+    .ring-2 { width: 200px; height: 200px; animation: spin 30s linear infinite reverse; border-right-color: rgba(79, 209, 255, 0.4); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Listening state — orb pulses */
+    .app.listening .orb {
+      animation: breathe 1.5s ease-in-out infinite;
+      box-shadow: 0 0 80px rgba(74, 222, 128, 0.5), inset 0 0 50px rgba(74, 222, 128, 0.35);
+      background: radial-gradient(circle at 35% 30%,
+        rgba(74, 222, 128, 0.65) 0%,
+        rgba(74, 222, 128, 0.2) 45%,
+        transparent 70%);
+    }
+    @keyframes breathe {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+
+    /* Thinking state — orb flickers */
+    .app.thinking .orb {
+      animation: flicker 0.8s ease-in-out infinite;
+      box-shadow: 0 0 80px rgba(250, 204, 21, 0.5), inset 0 0 50px rgba(250, 204, 21, 0.35);
+      background: radial-gradient(circle at 35% 30%,
+        rgba(250, 204, 21, 0.7) 0%,
+        rgba(250, 204, 21, 0.2) 45%,
+        transparent 70%);
+    }
+    @keyframes flicker {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.7; transform: scale(0.97); }
+    }
+
+    /* Speaking state */
+    .app.speaking .orb {
+      box-shadow: 0 0 90px rgba(244, 114, 182, 0.5), inset 0 0 60px rgba(244, 114, 182, 0.3);
+      background: radial-gradient(circle at 35% 30%,
+        rgba(244, 114, 182, 0.7) 0%,
+        rgba(244, 114, 182, 0.2) 45%,
+        transparent 70%);
+    }
+
+    /* ---- Chat transcript ---- */
+    .transcript {
+      width: 100%;
+      max-width: 720px;
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 4px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      scrollbar-width: thin;
+      scrollbar-color: var(--border) transparent;
+    }
+    .transcript::-webkit-scrollbar { width: 6px; }
+    .transcript::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+    .msg {
+      max-width: 80%;
+      padding: 12px 16px;
+      border-radius: 14px;
+      font-size: 15px;
+      line-height: 1.5;
+      border: 1px solid var(--border);
+      animation: fadeUp 0.25s ease;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: var(--user-bg);
+      border-color: rgba(79, 209, 255, 0.2);
+    }
+    .msg.jarvis {
+      align-self: flex-start;
+      background: var(--jarvis-bg);
+    }
+    .msg .who {
+      display: block;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    .msg.user .who { color: #7dd3fc; text-align: right; }
+    .msg.jarvis .who { color: var(--accent); }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---- Input ---- */
+    .input-bar {
+      width: 100%;
+      max-width: 720px;
+      display: flex;
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .input-bar input {
+      flex: 1;
+      background: var(--user-bg);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      padding: 14px 16px;
+      border-radius: 12px;
+      font-size: 15px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .input-bar input:focus { border-color: var(--accent-dim); }
+
+    .btn {
+      background: var(--user-bg);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      padding: 0 20px;
+      border-radius: 12px;
+      font-size: 14px;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .btn:hover { border-color: var(--accent-dim); color: var(--accent); }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    .btn.mic {
+      min-width: 52px;
+      justify-content: center;
+      font-size: 18px;
+      padding: 0;
+    }
+
+    /* Mic active */
+    .app.listening .btn.mic {
+      border-color: #4ade80;
+      color: #4ade80;
+      box-shadow: 0 0 20px rgba(74, 222, 128, 0.3);
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app" id="app">
+    <header>
+      <div class="brand">JARVIS</div>
+      <div class="status" id="status">
+        <span class="status-dot"></span>
+        <span id="status-text">Idle</span>
+      </div>
+    </header>
+
+    <div class="orb-wrap">
+      <div class="ring ring-1"></div>
+      <div class="ring ring-2"></div>
+      <div class="orb"></div>
+    </div>
+
+    <div class="transcript" id="transcript">
+      <div class="msg jarvis">
+        <span class="who">JARVIS</span>
+        Online. Type a message or click the mic.
+      </div>
+    </div>
+
+    <div class="input-bar">
+      <input id="input" type="text" placeholder="Type a command..." autocomplete="off">
+      <button class="btn mic" id="mic-btn" title="Click to speak">🎤</button>
+      <button class="btn" id="send-btn">Send</button>
+    </div>
+  </div>
+
+  <script>
+    const app = document.getElementById("app");
+    const statusEl = document.getElementById("status");
+    const statusText = document.getElementById("status-text");
+    const transcript = document.getElementById("transcript");
+    const input = document.getElementById("input");
+    const micBtn = document.getElementById("mic-btn");
+    const sendBtn = document.getElementById("send-btn");
+
+    function setState(state) {
+      app.className = "app" + (state ? " " + state : "");
+      statusEl.className = "status" + (state ? " " + state : "");
+      statusText.textContent = state ? state.charAt(0).toUpperCase() + state.slice(1) : "Idle";
+    }
+
+    function addMessage(who, text) {
+      const div = document.createElement("div");
+      div.className = "msg " + (who === "You" ? "user" : "jarvis");
+      const label = document.createElement("span");
+      label.className = "who";
+      label.textContent = who;
+      div.appendChild(label);
+      div.appendChild(document.createTextNode(text));
+      transcript.appendChild(div);
+      transcript.scrollTop = transcript.scrollHeight;
+    }
+
+    async function sendCommand(text) {
+      if (!text.trim()) return;
+      input.value = "";
+      addMessage("You", text);
+      setState("thinking");
+
+      try {
+        const res = await fetch("/api/command", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          addMessage("JARVIS", "Error: " + data.error);
+          setState("error");
+          setTimeout(() => setState(""), 1500);
+          return;
+        }
+        addMessage("JARVIS", data.reply);
+                if (data.exit) {
+          setState("speaking");
+          speakBrowser(data.reply, () => {
+            // Grey out the input after farewell
+            input.disabled = true;
+            sendBtn.disabled = true;
+            micBtn.disabled = true;
+            input.placeholder = "Session ended. Refresh to restart.";
+            setState("");
+          });
+          return;
+        }
+      } catch (e) {
+        addMessage("JARVIS", "Network error: " + e.message);
+        setState("error");
+        setTimeout(() => setState(""), 1500);
+      }
+    }
+
+    async function triggerVoice() {
+      micBtn.disabled = true;
+      setState("listening");
+      addMessage("JARVIS", "Listening... (5 seconds)");
+
+      try {
+        const res = await fetch("/api/voice", { method: "POST" });
+        const data = await res.json();
+        if (data.error) {
+          addMessage("JARVIS", data.error);
+          setState("");
+          return;
+        }
+        // Remove "Listening..." line by replacing it
+        addMessage("You", data.user);
+        addMessage("JARVIS", data.reply);
+                if (data.exit) {
+          setState("speaking");
+          speakBrowser(data.reply, () => {
+            // Grey out the input after farewell
+            input.disabled = true;
+            sendBtn.disabled = true;
+            micBtn.disabled = true;
+            input.placeholder = "Session ended. Refresh to restart.";
+            setState("");
+          });
+          return;
+        }
+      } catch (e) {
+        addMessage("JARVIS", "Voice error: " + e.message);
+        setState("error");
+        setTimeout(() => setState(""), 1500);
+      } finally {
+        micBtn.disabled = false;
+      }
+    }
+
+    function speakBrowser(text, onDone) {
+      // Use Web Speech API for a natural voice in the browser
+      if (!("speechSynthesis" in window)) {
+        onDone();
+        return;
+      }
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 1.0;
+      utter.pitch = 0.95;
+      const voices = window.speechSynthesis.getVoices();
+      const preferred = voices.find(v => v.name.includes("Google UK English Male"))
+                     || voices.find(v => v.name.includes("Daniel"))
+                     || voices.find(v => v.lang === "en-GB")
+                     || voices[0];
+      if (preferred) utter.voice = preferred;
+      utter.onend = onDone;
+      utter.onerror = onDone;
+      window.speechSynthesis.speak(utter);
+    }
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        sendCommand(input.value);
+      }
+    });
+    sendBtn.addEventListener("click", () => sendCommand(input.value));
+    micBtn.addEventListener("click", triggerVoice);
+
+    // Preload voices (Chrome needs this)
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => window.speechSynthesis.getVoices();
+    }
+
+    input.focus();
+  </script>
+
+</body>
+</html>

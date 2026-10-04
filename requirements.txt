@@ -7,3 +7,4 @@ scipy>=1.11
 requests>=2.31
 spotipy>=2.23
 psutil>=5.9
+flask>=3.0
