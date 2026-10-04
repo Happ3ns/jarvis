@@ -127,12 +127,14 @@ def parse_reminder_time(text: str) -> tuple:
     """Parse time expressions. Returns (seconds_from_now, matched_text) or (None, None)."""
     text_lower = text.lower()
 
-    # "in X minutes/hours/seconds"
-    m = re.search(r"in\s+(\d+)\s*(second|minute|hour|sec|min|hr)s?", text_lower)
+        # "in X minutes" OR "after X minutes" OR "for X minutes"
+    m = re.search(r"(?:in|after|for)\s+(\d+)\s*(second|minute|hour|sec|min|hr)s?",
+                  text_lower)
     if m:
         n = int(m.group(1))
         unit = m.group(2)
-        mult = {"second": 1, "sec": 1, "minute": 60, "min": 60, "hour": 3600, "hr": 3600}[unit]
+        mult = {"second": 1, "sec": 1, "minute": 60, "min": 60,
+                "hour": 3600, "hr": 3600}[unit]
         return n * mult, m.group(0)
 
     # "at 5pm" / "at 17:30" / "at 5:30pm"

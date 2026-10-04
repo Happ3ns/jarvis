@@ -101,7 +101,9 @@ def think(user_text: str) -> str:
     # ============================================================
     # REMINDERS
     # ============================================================
-    if "remind me" in text or "set a reminder" in text:
+    if any(p in text for p in ["remind me", "set a reminder", "put a reminder",
+                                "make a reminder", "create a reminder",
+                                "reminder to", "add a reminder"]):
         seconds, _ = parse_reminder_time(user_text)
         if seconds is None:
             return "When should I remind you? Try 'remind me in 10 minutes to...'"
