@@ -340,8 +340,7 @@ Please ensure your code follows the existing style and includes relevant tests w
 
 ## License
 
-This project does not currently specify a license.
-Contact the repository owner for licensing information.
+MIT — use, modify, and extend freely.
 
 ---
 
