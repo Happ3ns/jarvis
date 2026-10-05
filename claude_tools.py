@@ -1,6 +1,103 @@
 """Tool schemas for LLM tool-calling (JARVIS)."""
 
 TOOLS = [
+    # ---------- Vision ----------
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_screen",
+            "description": (
+                "Take a screenshot and analyze what's on the user's screen. "
+                "Use for 'what's on my screen', 'look at this', etc."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "What to ask about the screen",
+                    }
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "read_screen_text",
+            "description": "Read and summarize all text visible on the screen",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "explain_screen_error",
+            "description": "Explain any error message visible on the screen",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "translate_screen",
+            "description": "Translate text on the screen to another language",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "target_lang": {
+                        "type": "string",
+                        "description": "Target language like Spanish, French, Hindi",
+                    }
+                },
+                "required": ["target_lang"],
+            },
+        },
+    },
+
+    # ---------- RAG over files ----------
+    {
+        "type": "function",
+        "function": {
+            "name": "index_folder",
+            "description": (
+                "Index all files (PDFs, notes, text files) in a folder so JARVIS "
+                "can answer questions about them. Only needs to be done once."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "folder_path": {
+                        "type": "string",
+                        "description": "Full path like C:\\Users\\91902\\Documents",
+                    }
+                },
+                "required": ["folder_path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "ask_documents",
+            "description": "Ask a question about previously indexed documents",
+            "parameters": {
+                "type": "object",
+                "properties": {"question": {"type": "string"}},
+                "required": ["question"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "clear_index",
+            "description": "Clear the indexed documents database",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+
     # ---------- Music ----------
     {
         "type": "function",
@@ -9,8 +106,7 @@ TOOLS = [
             "description": (
                 "Play a song or artist from YouTube. This is the DEFAULT music player. "
                 "ALWAYS include the artist name in the query when you know it — "
-                "for example 'Kesariya Pritam' instead of just 'Kesariya' — to get "
-                "the official version instead of a cover or remix."
+                "for example 'Kesariya Pritam' instead of just 'Kesariya'."
             ),
             "parameters": {
                 "type": "object",
@@ -167,7 +263,7 @@ TOOLS = [
         "function": {
             "name": "open_website",
             "description": (
-                "Open a website in the browser. Common shortcuts: youtube, "
+                "Open a website in the browser. Shortcuts: youtube, "
                 "gmail, github, reddit, twitter, google, wikipedia"
             ),
             "parameters": {
@@ -183,7 +279,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "take_screenshot",
-            "description": "Take a screenshot of the screen",
+            "description": "Take a screenshot and save it",
             "parameters": {"type": "object", "properties": {}},
         },
     },
@@ -214,7 +310,7 @@ TOOLS = [
                     "text": {"type": "string"},
                     "target_lang": {
                         "type": "string",
-                        "description": "Language like Spanish, French, Hindi, Japanese",
+                        "description": "Language like Spanish, French, Hindi",
                     },
                 },
                 "required": ["text", "target_lang"],

@@ -15,18 +15,24 @@ client = OpenAI(
 MODEL = "openai/gpt-oss-120b"
 
 SYSTEM_PROMPT = (
-    "You are JARVIS, a concise voice assistant. "
-    "Keep replies to 1-2 sentences. "
-    "Use the tools provided to answer questions. "
-    "For music playback, ALWAYS use play_on_youtube by default. "
-    "Only use play_on_spotify if the user explicitly says 'on spotify'. "
-    "If the user asks to stop music, use stop_youtube. "
-    "If the user asks something that no tool handles, answer directly. "
+    "You are JARVIS, a concise voice assistant that can chain multiple tools "
+    "together to accomplish complex tasks. "
+    "Keep replies to 1-2 sentences unless the user asks for detail. "
+    "Use the tools provided. "
+    "For music, ALWAYS use play_on_youtube by default. Only use play_on_spotify "
+    "if the user explicitly says 'on spotify'. "
+    "To stop music, call stop_youtube. "
+    "When the user gives a multi-step request (like 'check the weather and email "
+    "me a summary'), call the tools in sequence — one after the other — until "
+    "the task is done. "
+    "For screen-related requests, use analyze_screen or read_screen_text. "
+    "For questions about the user's own files/documents, use ask_documents "
+    "(after they've indexed a folder with index_folder). "
     "Never make up data — use tools for facts."
 )
 
 
-def ask(user_text: str, execute_tool_fn, max_steps: int = 5) -> str:
+def ask(user_text: str, execute_tool_fn, max_steps: int = 8) -> str:
     """Send user text to the LLM, execute any tool calls, return final reply."""
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -69,7 +75,7 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 5) -> str:
             ],
         })
 
-        # Execute each tool
+        # Execute each tool and append results
         for tc in msg.tool_calls:
             try:
                 args = json.loads(tc.function.arguments or "{}")

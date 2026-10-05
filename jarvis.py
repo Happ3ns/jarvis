@@ -24,6 +24,10 @@ from advanced import (
     convert_units, convert_currency, translate_text, read_pdf,
 )
 from youtube_player import play_on_youtube, stop_youtube
+from screen_vision import (
+    analyze_screen, read_screen_text, explain_screen_error, translate_screen,
+)
+from document_rag import index_folder, ask_documents, clear_index
 from brain import ask as llm_ask
 
 
@@ -49,7 +53,6 @@ def _stop_all_music() -> str:
     """Stop YouTube (mpv) and pause Spotify, whichever is playing."""
     stopped_anything = False
 
-    # Stop YouTube
     try:
         result = stop_youtube()
         if "Nothing is playing" not in result:
@@ -57,7 +60,6 @@ def _stop_all_music() -> str:
     except Exception:
         pass
 
-    # Pause Spotify
     try:
         sp = get_spotify_client()
         if sp is not None:
@@ -75,7 +77,27 @@ def execute_tool(name: str, args: dict) -> str:
     """Route LLM tool calls to the actual Python functions."""
     args = args or {}
     try:
-        # Music
+        # ---------- Vision ----------
+        if name == "analyze_screen":
+            return analyze_screen(
+                args.get("question", "What's on this screen? Be brief.")
+            )
+        if name == "read_screen_text":
+            return read_screen_text()
+        if name == "explain_screen_error":
+            return explain_screen_error()
+        if name == "translate_screen":
+            return translate_screen(args.get("target_lang", "English"))
+
+        # ---------- RAG ----------
+        if name == "index_folder":
+            return index_folder(args["folder_path"])
+        if name == "ask_documents":
+            return ask_documents(args["question"])
+        if name == "clear_index":
+            return clear_index()
+
+        # ---------- Music ----------
         if name == "play_on_youtube":
             return play_on_youtube(args["query"])
         if name == "stop_youtube":
@@ -83,7 +105,7 @@ def execute_tool(name: str, args: dict) -> str:
         if name == "play_on_spotify":
             return play_on_spotify(args["query"])
 
-        # Info tools
+        # ---------- Info ----------
         if name == "get_weather":
             return get_weather(args["city"])
         if name == "search_web":
@@ -103,13 +125,13 @@ def execute_tool(name: str, args: dict) -> str:
         if name == "search_news":
             return search_news(args["query"])
 
-        # Launchers
+        # ---------- Launchers ----------
         if name == "open_app":
             return open_app(args["app_name"])
         if name == "open_website":
             return open_website(args["site"])
 
-        # Productivity
+        # ---------- Productivity ----------
         if name == "take_screenshot":
             return take_screenshot()
         if name == "send_email":
@@ -123,7 +145,7 @@ def execute_tool(name: str, args: dict) -> str:
         if name == "set_reminder":
             return set_reminder(args["seconds"], args["message"], speak_fn=speak)
 
-        # Utilities
+        # ---------- Utilities ----------
         if name == "flip_coin":
             return flip_coin()
         if name == "roll_dice":
@@ -145,11 +167,11 @@ def execute_tool(name: str, args: dict) -> str:
 def think(user_text: str) -> str:
     text = user_text.lower().strip()
 
-    # ---- Fast path: stop music (no LLM needed) ----
+    # Fast-path: stop music (no LLM)
     if text in STOP_MUSIC_PHRASES:
         return _stop_all_music()
 
-    # ---- Fast path: memory commands ----
+    # Fast-path: memory commands
     if any(p in text for p in ["what did i just ask", "repeat my question"]):
         return recall_last_question()
     if any(p in text for p in ["what did you just say", "repeat that", "say that again"]):
