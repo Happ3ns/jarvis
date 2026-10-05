@@ -1,6 +1,152 @@
 """Tool schemas for LLM tool-calling (JARVIS)."""
 
 TOOLS = [
+        # ---------- Browser automation ----------
+    {
+        "type": "function",
+        "function": {
+            "name": "open_url",
+            "description": "Open a URL in a real Chrome browser window and return the page title.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "Full URL or domain like 'youtube.com'"}
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_youtube",
+            "description": "Search YouTube in a real browser and return the top 5 video titles.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"}
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_google",
+            "description": "Search Google in a real browser and return the top 5 results.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"}
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_page_text",
+            "description": "Extract visible text from the currently open browser page.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "click_element",
+            "description": "Click an element on the current page by its visible text.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "Visible text of the element to click"}
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "type_into",
+            "description": "Type text into an input field on the current page. Optionally submit by pressing Enter.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "selector": {"type": "string", "description": "CSS selector like 'input#search'"},
+                    "text": {"type": "string"},
+                    "submit": {"type": "boolean", "description": "Press Enter after typing"}
+                },
+                "required": ["selector", "text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "run_browser_code",
+            "description": "Run custom Playwright code on the current page. Use for anything the other browser tools can't do. The variable `page` is already bound to the active browser tab. Use print() to output results.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "Python code using the `page` object"}
+                },
+                "required": ["code"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "close_browser",
+            "description": "Close the browser window",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+        {
+        "type": "function",
+        "function": {
+            "name": "run_code",
+            "description": "Run Python code in a sandbox. Use for calculations, data analysis, plotting, or any task that needs computation. The code can print() its output. Available libraries: pandas, numpy, math, statistics, json, csv, re, datetime. Blocked: os, subprocess, socket, requests.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {"type": "string", "description": "Python code to execute"}
+                },
+                "required": ["code"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "compute",
+            "description": "Quick math computation. Returns the result of a Python expression like '15 * 47' or 'sum(range(100))' or '2 ** 100'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {"type": "string"}
+                },
+                "required": ["expression"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "analyze_file",
+            "description": "Analyze a CSV or JSON file: shows columns, shape, summary stats, first rows. Use when the user asks to analyze or summarize a data file.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "Full file path"},
+                    "question": {"type": "string", "description": "What to find out about the file"},
+                },
+                "required": ["path", "question"],
+            },
+        },
+    },
         # ---------- Long-term memory ----------
     {
         "type": "function",

@@ -6,6 +6,10 @@ to full commands before being sent to the LLM, saving typing.
 
 # Mapping of /shortcut → full command prefix
 SLASH_COMMANDS = {
+    "/yt":        "search youtube for",
+    "/google":    "search google for",
+    "/browse":    "open url",
+    "/closebrowser": "close browser",
     "/remember":  "remember",
     "/forget":    "forget",
     "/memory":    "what do you know about me",

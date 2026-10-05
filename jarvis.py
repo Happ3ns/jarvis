@@ -2,6 +2,8 @@
 
 Run with: python jarvis.py
 """
+from code_runner import run_code, compute, analyze_file
+import browser_control
 import memory
 import slash_commands
 import input_handler
@@ -63,6 +65,24 @@ def _stop_all_music() -> str:
 def execute_tool(name: str, args: dict) -> str:
     args = args or {}
     try:
+                # Browser automation
+        if name == "open_url":
+            return browser_control.open_url(args["url"])
+        if name == "search_youtube":
+            return browser_control.search_youtube(args["query"])
+        if name == "search_google":
+            return browser_control.search_google(args["query"])
+        if name == "get_page_text":
+            return browser_control.get_page_text()
+        if name == "click_element":
+            return browser_control.click_element(args["text"])
+        if name == "type_into":
+            return browser_control.type_into(args["selector"], args["text"], args.get("submit", False))
+        if name == "run_browser_code":
+            return browser_control.run_browser_code(args["code"])
+        if name == "close_browser":
+            return browser_control.close_browser()
+        
         # Vision
         if name == "analyze_screen":
             return analyze_screen(args.get("question", "What's on this screen? Be brief."))
@@ -72,7 +92,13 @@ def execute_tool(name: str, args: dict) -> str:
             return explain_screen_error()
         if name == "translate_screen":
             return translate_screen(args.get("target_lang", "English"))
-
+        
+        if name == "run_code":
+            return run_code(args["code"])
+        if name == "compute":
+            return compute(args["expression"])
+        if name == "analyze_file":
+            return analyze_file(args["path"], args.get("question", "describe this file"))
         # RAG
         if name == "index_folder":
             return index_folder(args["folder_path"])
@@ -259,6 +285,10 @@ def main():
         speak("Interrupted. Goodbye.")
     finally:
         input_handler.stop()
+        try:
+            browser_control.close_browser()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":
