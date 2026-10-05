@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>J.A.R.V.I.S.</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   :root {
     --bg-0: #02060b;
@@ -826,6 +827,92 @@
     .panel.left, .panel.right { display: none; }
     .main::before, .main::after { display: none; }
   }
+    /* ============ Rendered Markdown in JARVIS messages ============ */
+  .msg.jarvis h1,
+  .msg.jarvis h2,
+  .msg.jarvis h3 {
+    color: var(--cyan);
+    font-size: 13px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin: 14px 0 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid var(--line-dim);
+  }
+  .msg.jarvis h1:first-child,
+  .msg.jarvis h2:first-child,
+  .msg.jarvis h3:first-child {
+    margin-top: 0;
+  }
+
+  .msg.jarvis p {
+    margin: 8px 0;
+  }
+
+  .msg.jarvis strong {
+    color: var(--cyan);
+    font-weight: 600;
+  }
+
+  .msg.jarvis em {
+    color: var(--gold);
+    font-style: italic;
+  }
+
+  .msg.jarvis ul,
+  .msg.jarvis ol {
+    margin: 8px 0 8px 20px;
+    padding-left: 8px;
+  }
+  .msg.jarvis li {
+    margin: 4px 0;
+    line-height: 1.55;
+  }
+  .msg.jarvis ul li::marker { color: var(--cyan); }
+  .msg.jarvis ol li::marker { color: var(--cyan); }
+
+  .msg.jarvis code {
+    background: rgba(0, 229, 255, 0.08);
+    color: var(--cyan);
+    padding: 1px 6px;
+    border-radius: 3px;
+    font-size: 11px;
+  }
+
+  .msg.jarvis pre {
+    background: rgba(0, 229, 255, 0.04);
+    border: 1px solid var(--line-dim);
+    border-left: 2px solid var(--cyan);
+    padding: 10px 14px;
+    margin: 10px 0;
+    overflow-x: auto;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+  .msg.jarvis pre code {
+    background: transparent;
+    padding: 0;
+    color: var(--fg);
+  }
+
+  .msg.jarvis hr {
+    border: none;
+    border-top: 1px solid var(--line-dim);
+    margin: 12px 0;
+  }
+
+  .msg.jarvis a {
+    color: var(--cyan);
+    text-decoration: underline;
+  }
+
+  .msg.jarvis blockquote {
+    border-left: 2px solid var(--cyan-dim);
+    padding-left: 12px;
+    margin: 8px 0;
+    color: var(--muted);
+    font-style: italic;
+  }
 </style>
 </head>
 <body>
@@ -1305,7 +1392,8 @@
               return;
             }
             fullReply += payload.text;
-            textSpan.textContent = fullReply;
+            // Render markdown on every chunk
+            textSpan.innerHTML = marked.parse(fullReply, { breaks: true, gfm: true });
             transcript.scrollTop = transcript.scrollHeight;
 
           } else if (payload.kind === "status") {

@@ -46,6 +46,11 @@ SYSTEM_PROMPT = (
     "with 'PLAN:' followed by a short numbered list (max 6 items). "
     "Then execute each step using tools, one after the other. "
     "Finally, give a 1-2 sentence summary of the result. "
+    
+    "Format itineraries, plans, and step-by-step lists as markdown with "
+    "each step or day as its own line, using bold for time slots "
+    "(**Morning**, **Afternoon**) and bullets for activities. "
+    "Use blank lines between sections. Keep it scannable."
 
     "For simple questions, answer directly without a plan. "
     "You have up to 25 tool calls per request. "
