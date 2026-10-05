@@ -8,6 +8,7 @@ _lock = threading.Lock()
 
 
 def _stop_spotify_playback():
+    """Pause Spotify if anything is playing there."""
     try:
         from tools import get_spotify_client
         sp = get_spotify_client()
@@ -18,8 +19,11 @@ def _stop_spotify_playback():
 
 
 def play_on_youtube(query: str) -> str:
+    """Search YouTube and play the first result's audio through mpv."""
     global _current_proc
+
     with _lock:
+        # Stop any current playback
         if _current_proc is not None:
             try:
                 _current_proc.terminate()
@@ -28,28 +32,20 @@ def play_on_youtube(query: str) -> str:
                 pass
             _current_proc = None
 
+        # Pause Spotify so they don't overlap
         _stop_spotify_playback()
 
+        # Search YouTube
         try:
             result = subprocess.run(
-                ["yt-dlp", f"ytsearch5:{query}", "--get-title", "--get-id",
+                ["yt-dlp", f"ytsearch1:{query}", "--get-title", "--get-id",
                  "--no-playlist", "--quiet", "--js-runtimes", "deno"],
-                capture_output=True, text=True, timeout=20,
+                capture_output=True, text=True, timeout=30,
             )
             lines = [l for l in result.stdout.strip().split("\n") if l]
             if len(lines) < 2:
                 return f"Couldn't find {query} on YouTube."
-
-            pairs = [(lines[i], lines[i + 1]) for i in range(0, len(lines) - 1, 2)]
-
-            bad_words = ["cover", "remix", "karaoke", "instrumental",
-                         "reaction", "tutorial", "live", "slowed",
-                         "reverb", "8d", "bass boosted", "mashup"]
-            good = [p for p in pairs
-                    if not any(b in p[0].lower() for b in bad_words)]
-
-            title, video_id = good[0] if good else pairs[0]
-
+            title, video_id = lines[0], lines[1]
         except FileNotFoundError:
             return "Install yt-dlp first: pip install yt-dlp"
         except subprocess.TimeoutExpired:
@@ -57,7 +53,9 @@ def play_on_youtube(query: str) -> str:
         except Exception as e:
             return f"YouTube search error: {e}"
 
+        # Play with mpv
         url = f"https://www.youtube.com/watch?v={video_id}"
+        print(f"[YouTube] Playing: {title}")
         try:
             _current_proc = subprocess.Popen(
                 ["mpv", "--no-video", "--really-quiet", url],
@@ -65,12 +63,13 @@ def play_on_youtube(query: str) -> str:
                 stderr=subprocess.DEVNULL,
             )
         except FileNotFoundError:
-            return "Install mpv first: winget install mpv"
+            return "Install mpv first. Run: winget install mpv-player.mpv-CI.MSVC --exact"
 
         return f"Playing {title} on YouTube."
 
 
 def stop_youtube() -> str:
+    """Stop whatever's currently playing."""
     global _current_proc
     with _lock:
         if _current_proc is None:
