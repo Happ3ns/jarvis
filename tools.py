@@ -208,15 +208,20 @@ def play_on_spotify(query: str) -> str:
     sp = get_spotify_client()
     if sp is None:
         return "Spotify isn't set up yet."
+
+    # Stop YouTube first so they don't overlap
+    try:
+        from youtube_player import stop_youtube
+        stop_youtube()
+    except Exception:
+        pass
+
     try:
         print(f"[Spotify search: '{query}']")
         results = sp.search(q=query, limit=5, type="track", market="IN")
         items = results["tracks"]["items"]
-
         if items:
-            # Pick the most popular match — this is usually the original song
             items = sorted(items, key=lambda t: t.get("popularity", 0), reverse=True)
-
         if not items:
             return f"Couldn't find {query} on Spotify."
 
@@ -239,8 +244,12 @@ def play_on_spotify(query: str) -> str:
                 return False
             return True
 
-        # Always target the browser web player
+        # Prefer web player, then active device
         chosen = next((d for d in devices if is_browser(d) and usable(d)), None)
+        if chosen is None:
+            chosen = next((d for d in devices if d.get("is_active") and usable(d)), None)
+        if chosen is None:
+            chosen = next((d for d in devices if usable(d)), None)
 
         if chosen is None:
             return ("Open open.spotify.com in Chrome first, play any song "

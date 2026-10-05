@@ -3,15 +3,13 @@
 Run with: python jarvis.py
 """
 
-import json
-
 import input_handler
 from voice import listen_voice, speak
 from tools import (
     get_weather, get_time, get_date, get_system_info, get_ip,
     open_app, open_website,
     search_wikipedia, random_wikipedia,
-    play_on_spotify,
+    play_on_spotify, get_spotify_client,
     calculate, set_timer, take_note, read_notes,
     flip_coin, roll_dice,
 )
@@ -25,28 +23,71 @@ from advanced import (
     recall_recent, set_reminder, parse_reminder_time,
     convert_units, convert_currency, translate_text, read_pdf,
 )
+from youtube_player import play_on_youtube, stop_youtube
 from brain import ask as llm_ask
 
 
 QUIET_PREFIX = "__QUIET__"
 
+STOP_MUSIC_PHRASES = {
+    "stop",
+    "stop music",
+    "stop the music",
+    "stop playing",
+    "stop youtube",
+    "stop the song",
+    "stop the song please",
+    "kill the music",
+    "pause the music",
+    "pause music",
+    "shut the music",
+    "stop the audio",
+}
+
+
+def _stop_all_music() -> str:
+    """Stop YouTube (mpv) and pause Spotify, whichever is playing."""
+    stopped_anything = False
+
+    # Stop YouTube
+    try:
+        result = stop_youtube()
+        if "Nothing is playing" not in result:
+            stopped_anything = True
+    except Exception:
+        pass
+
+    # Pause Spotify
+    try:
+        sp = get_spotify_client()
+        if sp is not None:
+            sp.pause_playback()
+            stopped_anything = True
+    except Exception:
+        pass
+
+    if stopped_anything:
+        return "Music stopped."
+    return "Nothing is playing."
+
 
 def execute_tool(name: str, args: dict) -> str:
     """Route LLM tool calls to the actual Python functions."""
     args = args or {}
-
     try:
-        # Direct tools
+        # Music
+        if name == "play_on_youtube":
+            return play_on_youtube(args["query"])
+        if name == "stop_youtube":
+            return _stop_all_music()
+        if name == "play_on_spotify":
+            return play_on_spotify(args["query"])
+
+        # Info tools
         if name == "get_weather":
             return get_weather(args["city"])
         if name == "search_web":
             return search_web(args["query"])
-        if name == "play_on_spotify":
-            return play_on_spotify(args["query"])
-        if name == "open_app":
-            return open_app(args["app_name"])
-        if name == "open_website":
-            return open_website(args["site"])
         if name == "search_wikipedia":
             return search_wikipedia(args["query"])
         if name == "calculate":
@@ -61,6 +102,14 @@ def execute_tool(name: str, args: dict) -> str:
             return get_ip()
         if name == "search_news":
             return search_news(args["query"])
+
+        # Launchers
+        if name == "open_app":
+            return open_app(args["app_name"])
+        if name == "open_website":
+            return open_website(args["site"])
+
+        # Productivity
         if name == "take_screenshot":
             return take_screenshot()
         if name == "send_email":
@@ -73,6 +122,8 @@ def execute_tool(name: str, args: dict) -> str:
             return convert_units(args["query"])
         if name == "set_reminder":
             return set_reminder(args["seconds"], args["message"], speak_fn=speak)
+
+        # Utilities
         if name == "flip_coin":
             return flip_coin()
         if name == "roll_dice":
@@ -92,11 +143,13 @@ def execute_tool(name: str, args: dict) -> str:
 
 
 def think(user_text: str) -> str:
-    """Route through the LLM, which decides which tool to call."""
-
-    # Handle memory/exit commands locally (fast paths)
     text = user_text.lower().strip()
 
+    # ---- Fast path: stop music (no LLM needed) ----
+    if text in STOP_MUSIC_PHRASES:
+        return _stop_all_music()
+
+    # ---- Fast path: memory commands ----
     if any(p in text for p in ["what did i just ask", "repeat my question"]):
         return recall_last_question()
     if any(p in text for p in ["what did you just say", "repeat that", "say that again"]):
@@ -109,7 +162,6 @@ def think(user_text: str) -> str:
 
 
 def handle_reply(reply: str) -> None:
-    """Speak or print based on whether the reply is marked quiet."""
     if reply.startswith(QUIET_PREFIX):
         speak(reply[len(QUIET_PREFIX):], quiet=True)
     else:
@@ -124,28 +176,22 @@ def main():
             item = input_handler.get()
             if item is None:
                 continue
-
             source, text = item
-
             if source == "voice":
                 speak("Listening...")
                 user_text = listen_voice()
             else:
                 print(f"You (typed): {text}")
                 user_text = text
-
             if not user_text:
                 continue
-
             if any(w in user_text.lower() for w in
                    ["exit", "goodbye", "shut down", "quit"]):
                 speak("Shutting down.")
                 break
-
             reply = think(user_text)
             remember(user_text, reply)
             handle_reply(reply)
-
     except KeyboardInterrupt:
         speak("Interrupted. Goodbye.")
     finally:

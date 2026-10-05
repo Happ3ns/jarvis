@@ -7,16 +7,17 @@ TOOLS = [
         "function": {
             "name": "play_on_youtube",
             "description": (
-                "Play a song, artist, or any audio from YouTube. "
-                "This is the DEFAULT music player. Use this whenever the user "
-                "asks to play music unless they explicitly say 'on spotify'."
+                "Play a song or artist from YouTube. This is the DEFAULT music player. "
+                "ALWAYS include the artist name in the query when you know it — "
+                "for example 'Kesariya Pritam' instead of just 'Kesariya' — to get "
+                "the official version instead of a cover or remix."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "query": {
                         "type": "string",
-                        "description": "Song name, artist, or search query",
+                        "description": "Song and artist, e.g. 'Kesariya Pritam'",
                     }
                 },
                 "required": ["query"],
