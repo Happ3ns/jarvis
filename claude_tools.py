@@ -1,6 +1,98 @@
 """Tool schemas for LLM tool-calling (JARVIS)."""
 
 TOOLS = [
+        # ---------- Long-term memory ----------
+    {
+        "type": "function",
+        "function": {
+            "name": "remember_fact",
+            "description": "Store a fact about the user permanently. Use for 'remember X', 'note that X', 'keep in mind that X'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string", "description": "The fact to remember"}
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "recall_facts",
+            "description": "Retrieve all stored facts about the user. Use for 'what do you know about me', 'what do you remember'.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "forget_fact",
+            "description": "Delete a stored fact about the user",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text": {"type": "string"}
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_past_conversations",
+            "description": "Search the user's past conversations for a keyword. Use for 'when did I ask about X', 'search my history for X'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"}
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_conversations_on",
+            "description": "Get the user's conversations from a specific date. Use for 'what did I ask yesterday', 'what did we talk about last Monday'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "date": {
+                        "type": "string",
+                        "description": "today, yesterday, last Monday, N days ago, or YYYY-MM-DD"
+                    }
+                },
+                "required": ["date"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_recent_conversations",
+            "description": "Get the most recent conversation exchanges",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "memory_stats",
+            "description": "Show how many facts and conversations are stored",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "clear_all_facts",
+            "description": "Delete all stored facts. Use for 'forget everything about me', 'clear my data'.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
     # ---------- Vision ----------
     {
         "type": "function",

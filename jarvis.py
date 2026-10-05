@@ -2,6 +2,7 @@
 
 Run with: python jarvis.py
 """
+import memory
 import slash_commands
 import input_handler
 from voice import listen_voice, speak
@@ -79,7 +80,23 @@ def execute_tool(name: str, args: dict) -> str:
             return ask_documents(args["question"])
         if name == "clear_index":
             return clear_index()
-
+        # Long-term memory
+        if name == "remember_fact":
+            return memory.remember_fact(args["text"])
+        if name == "recall_facts":
+            return memory.get_all_facts()
+        if name == "forget_fact":
+            return memory.forget_fact(args["text"])
+        if name == "search_past_conversations":
+            return memory.search_conversations(args["query"])
+        if name == "get_conversations_on":
+            return memory.get_conversations_on(args["date"])
+        if name == "get_recent_conversations":
+            return memory.get_recent_conversations(5)
+        if name == "memory_stats":
+            return memory.get_stats()
+        if name == "clear_all_facts":
+            return memory.clear_all_facts()
         # Music
         if name == "play_on_youtube":
             return play_on_youtube(args["query"])
@@ -233,7 +250,8 @@ def main():
             print()
 
             remember(user_text, full_reply)
-
+            
+            memory.log_conversation(user_text, full_reply)   # <-- new line
             if not full_reply.startswith(QUIET_PREFIX):
                 speak(full_reply)
 

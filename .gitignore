@@ -7,4 +7,5 @@ venv/
 notes.txt
 .cache
 token.json
-
+memory.db
+memory.db-journal

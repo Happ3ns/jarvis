@@ -1,7 +1,7 @@
 """Web UI for JARVIS — Flask server with streaming support."""
 
 import json
-
+import memory
 from flask import Flask, render_template, request, jsonify, Response
 
 from jarvis import think_stream, QUIET_PREFIX
@@ -47,7 +47,8 @@ def command():
     if not quiet:
         speak(reply)
     remember(user_text, reply)
-
+    
+    memory.log_conversation(user_text, reply)   # <-- new line
     return jsonify({
         "user": user_text, "reply": reply,
         "speak": not quiet, "exit": False,
@@ -87,7 +88,7 @@ def command_stream():
         if not quiet:
             speak(reply)
         remember(user_text, reply)
-
+        memory.log_conversation(user_text, reply)
         yield f"data: {json.dumps({'kind': 'done', 'reply': reply, 'speak': not quiet})}\n\n"
 
     return Response(
@@ -123,7 +124,8 @@ def voice():
     if not quiet:
         speak(reply)
     remember(user_text, reply)
-
+    
+    memory.log_conversation(user_text, reply)   # <-- new line
     return jsonify({
         "user": user_text, "reply": reply,
         "speak": not quiet, "exit": False,

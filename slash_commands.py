@@ -6,6 +6,11 @@ to full commands before being sent to the LLM, saving typing.
 
 # Mapping of /shortcut → full command prefix
 SLASH_COMMANDS = {
+    "/remember":  "remember",
+    "/forget":    "forget",
+    "/memory":    "what do you know about me",
+    "/history":   "what did we talk about recently",
+    "/stats":     "memory stats",
     "/w":         "what's the weather in",
     "/weather":   "what's the weather in",
     "/s":         "search for",
@@ -31,6 +36,11 @@ SLASH_COMMANDS = {
 
 HELP_TEXT = (
     "Slash commands: "
+    "/remember [text] — save a fact | "
+    "/memory — recall facts | "
+    "/forget [text] — delete a fact | "
+    "/history — recent conversations | "
+    "/stats — memory stats | "
     "/w [city] — weather | "
     "/s [query] — web search | "
     "/n [topic] — news | "

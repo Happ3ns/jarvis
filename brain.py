@@ -29,9 +29,12 @@ SYSTEM_PROMPT = (
     "For music, ALWAYS use play_on_youtube by default. Only use play_on_spotify "
     "if the user explicitly says 'on spotify'. "
     "To stop music, call stop_youtube. "
-    "When the user gives a multi-step request, call the tools in sequence. "
     "For screen-related requests, use analyze_screen or read_screen_text. "
     "For questions about the user's own files, use ask_documents. "
+    "When the user says 'remember X' or 'note that X', call remember_fact. "
+    "When the user asks 'what do you know about me', call recall_facts. "
+    "When the user asks about past conversations, use search_past_conversations "
+    "or get_conversations_on. "
     "Never make up data — use tools for facts."
 )
 
