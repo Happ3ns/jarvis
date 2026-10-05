@@ -7,7 +7,6 @@
 <style>
   :root {
     --bg-0: #02060b;
-    --bg-1: #04101c;
     --cyan: #00e5ff;
     --cyan-dim: #0088a8;
     --cyan-faint: rgba(0, 229, 255, 0.15);
@@ -103,7 +102,7 @@
     gap: 0;
   }
 
-  /* Corner brackets — thicker, gold */
+  /* Corner brackets */
   .bracket {
     position: fixed;
     width: 44px;
@@ -117,14 +116,6 @@
   .bracket.tr { top: 6px; right: 6px; border-left: none; border-bottom: none; }
   .bracket.bl { bottom: 6px; left: 6px; border-right: none; border-top: none; }
   .bracket.br { bottom: 6px; right: 6px; border-left: none; border-top: none; }
-
-  .bracket-tick {
-    position: fixed;
-    background: var(--gold);
-    box-shadow: 0 0 6px var(--gold-glow);
-    pointer-events: none;
-    z-index: 10;
-  }
 
   /* ============ TOPBAR ============ */
   .topbar {
@@ -317,8 +308,6 @@
   .row .k { color: var(--muted); text-transform: uppercase; font-size: 9px; letter-spacing: 0.2em; }
   .row .v { color: var(--fg); font-weight: 500; }
   .row .v.ok { color: var(--green); text-shadow: 0 0 6px rgba(51,255,153,0.5); }
-  .row .v.warn { color: var(--gold); text-shadow: 0 0 6px var(--gold-glow); }
-  .row .v.err { color: var(--red); }
 
   /* Radial meter */
   .ring-meter {
@@ -389,7 +378,6 @@
     font-size: 9px;
   }
   .activity-item.hot { color: var(--fg); }
-    .activity-item.hot { color: var(--fg); }
   .activity-item.hot::before {
     background: var(--gold);
     box-shadow: 0 0 6px var(--gold);
@@ -440,25 +428,18 @@
     align-items: center;
     justify-content: center;
   }
-
-  /* SVG overlay rings */
   .reactor svg {
     position: absolute;
     inset: 0;
     overflow: visible;
   }
-
   .reactor-core {
     position: relative;
     width: 110px;
     height: 110px;
     border-radius: 50%;
     background: radial-gradient(circle at 40% 35%,
-      #bff4ff 0%,
-      #6fe0f7 12%,
-      #00e5ff 40%,
-      #0088a8 70%,
-      #003d4d 100%);
+      #bff4ff 0%, #6fe0f7 12%, #00e5ff 40%, #0088a8 70%, #003d4d 100%);
     box-shadow:
       0 0 40px var(--cyan),
       0 0 90px var(--cyan-glow),
@@ -489,7 +470,6 @@
     50% { opacity: 0.55; transform: scale(0.92); }
   }
 
-  /* Triangular supports around core */
   .reactor-tri {
     position: absolute;
     inset: 0;
@@ -510,7 +490,6 @@
   .reactor-tri::before { transform: rotate(0deg) translate(-40px, -35px); }
   .reactor-tri::after  { transform: rotate(180deg) translate(-40px, 35px); }
 
-  /* State-based core colors */
   .app.listening .reactor-core {
     background: radial-gradient(circle at 40% 35%,
       #c9ffd9 0%, #6fffa3 12%, #33ff99 40%, #00a855 70%, #004020 100%);
@@ -541,15 +520,6 @@
   @keyframes coreSpin {
     0%, 100% { transform: scale(1) rotate(0deg); }
     50% { transform: scale(1.08) rotate(180deg); }
-  }
-
-  /* ---- Waveform ring ---- */
-  .wave-ring {
-    position: absolute;
-    width: 260px;
-    height: 260px;
-    pointer-events: none;
-    z-index: 2;
   }
 
   /* ---- Transcript ---- */
@@ -809,7 +779,7 @@
     to { opacity: 1; transform: translateX(0); }
   }
 
-  /* Reactor line in boot */
+  /* Reactor in boot */
   .boot-reactor {
     width: 120px;
     height: 120px;
@@ -838,7 +808,15 @@
     box-shadow: 0 0 30px var(--cyan);
     animation: reactorPulse 2s ease-in-out infinite;
   }
-  @keyframes spinSlow { to { transform: translate(-50%, 0) rotate(360deg); } }
+
+  @keyframes spinSlow {
+    from { transform: translate(-50%, 0) rotate(0deg); }
+    to { transform: translate(-50%, 0) rotate(360deg); }
+  }
+  @keyframes spinSlowNoOffset {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
 
   /* ============ RESPONSIVE ============ */
   @media (max-width: 1000px) {
@@ -870,7 +848,7 @@
     <div class="boot-line" style="animation-delay: 0.1s;">> STARK INDUSTRIES // OS v0.4</div>
     <div class="boot-line" style="animation-delay: 0.5s;">> INITIALIZING NEURAL CORE... <span class="ok">[ OK ]</span></div>
     <div class="boot-line" style="animation-delay: 0.9s;">> LOADING SPEECH ENGINE... <span class="ok">[ OK ]</span></div>
-    <div class="boot-line" style="animation-delay: 1.3s;">> MOUNTING 15 TOOL MODULES... <span class="ok">[ OK ]</span></div>
+    <div class="boot-line" style="animation-delay: 1.3s;">> MOUNTING 30 TOOL MODULES... <span class="ok">[ OK ]</span></div>
     <div class="boot-line" style="animation-delay: 1.7s;">> CALIBRATING AUDIO I/O... <span class="ok">[ OK ]</span></div>
     <div class="boot-line" style="animation-delay: 2.1s;">> SYSTEM ONLINE.</div>
   </div>
@@ -880,7 +858,7 @@
 <!-- Main frame -->
 <div class="frame app" id="app">
 
-  <!-- ============ TOPBAR ============ -->
+  <!-- TOPBAR -->
   <div class="topbar">
     <div class="logo-block">
       <div class="logo-mark"></div>
@@ -902,7 +880,7 @@
     </div>
   </div>
 
-  <!-- ============ MAIN ============ -->
+  <!-- MAIN -->
   <div class="main">
 
     <!-- LEFT PANEL -->
@@ -949,19 +927,17 @@
     <div class="center">
 
       <div class="reactor">
-        <!-- SVG rings + waveform -->
         <svg viewBox="0 0 320 320" width="320" height="320">
           <!-- Tick marks outer -->
-          <g id="ticks" stroke="#00e5ff" stroke-width="1" opacity="0.6">
-            <!-- generated by JS -->
-          </g>
+          <g id="ticks" stroke="#00e5ff" stroke-width="1" opacity="0.6"></g>
+
           <!-- Rotating dashed outer -->
           <circle cx="160" cy="160" r="152"
                   fill="none"
                   stroke="rgba(0,229,255,0.25)"
                   stroke-width="1"
                   stroke-dasharray="2 8"
-                  style="transform-origin: 160px 160px; animation: spinSlow 40s linear infinite;"/>
+                  style="transform-origin: 160px 160px; animation: spinSlowNoOffset 40s linear infinite;"/>
 
           <!-- Rotating solid arcs -->
           <circle cx="160" cy="160" r="140"
@@ -971,14 +947,14 @@
                   stroke-dasharray="220 660"
                   stroke-linecap="round"
                   opacity="0.85"
-                  style="transform-origin: 160px 160px; animation: spinSlow 8s linear infinite; filter: drop-shadow(0 0 4px #00e5ff);"/>
+                  style="transform-origin: 160px 160px; animation: spinSlowNoOffset 8s linear infinite; filter: drop-shadow(0 0 4px #00e5ff);"/>
           <circle cx="160" cy="160" r="140"
                   fill="none"
                   stroke="rgba(0,229,255,0.3)"
                   stroke-width="1"
                   stroke-dasharray="100 780"
                   stroke-linecap="round"
-                  style="transform-origin: 160px 160px; animation: spinSlow 12s linear infinite reverse;"/>
+                  style="transform-origin: 160px 160px; animation: spinSlowNoOffset 12s linear infinite reverse;"/>
 
           <!-- Static inner ring -->
           <circle cx="160" cy="160" r="90"
@@ -1015,7 +991,7 @@
       </div>
     </div>
 
-        <!-- RIGHT PANEL -->
+    <!-- RIGHT PANEL -->
     <div class="panel right">
       <div class="panel-block">
         <div class="panel-title">Activity Log</div>
@@ -1054,19 +1030,18 @@
       <div class="panel-block">
         <div class="panel-title">Session</div>
         <div class="row"><span class="k">COMMANDS</span><span class="v" id="cmdCount">0</span></div>
-        <div class="row"><span class="k">TOOLS</span><span class="v">15</span></div>
-        <div class="row"><span class="k">MODEL</span><span class="v">WHISPER</span></div>
+        <div class="row"><span class="k">TOOLS</span><span class="v">30</span></div>
+        <div class="row"><span class="k">MODEL</span><span class="v">GPT-OSS</span></div>
       </div>
-    </div>
     </div>
   </div>
 
-  <!-- ============ BOTTOM BAR ============ -->
+  <!-- BOTTOM BAR -->
   <div class="bottombar">
     <div class="bottom-block">
       <span>STARK INDUSTRIES © 2026</span>
       <span>·</span>
-      <span>MODULES: <span class="val">15</span></span>
+      <span>MODULES: <span class="val">30</span></span>
       <span>·</span>
       <span>SESSION: <span class="val" id="session2">00:00</span></span>
     </div>
@@ -1079,13 +1054,6 @@
     </div>
   </div>
 </div>
-
-<style>
-  @keyframes spinSlow {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-</style>
 
 <script>
   const app = document.getElementById("app");
@@ -1209,8 +1177,6 @@
     const label = state ? state.toUpperCase() : "IDLE";
     statusText.textContent = label;
     statusBottom.innerHTML = `STATUS: <span class="val">${label}</span>`;
-
-    // Update bottom color accent
     const colors = {
       listening: "#33ff99",
       thinking: "#ffd700",
@@ -1256,108 +1222,112 @@
   }
 
   // ============ Commands ============
-      async function sendCommand(text) {
-      if (!text.trim()) return;
-      input.value = "";
-      addMessage("You", text);
-      logActivity("&gt; " + text.slice(0, 26), true);
-      bumpCount();
-      setState("thinking");
+  async function sendCommand(text) {
+    if (!text.trim()) return;
+    input.value = "";
+    addMessage("You", text);
+    logActivity("&gt; " + text.slice(0, 26), true);
+    bumpCount();
+    setState("thinking");
 
-      // Create the reply bubble immediately so text can stream into it
-            // Create the reply bubble with status container ABOVE text
-      const replyDiv = document.createElement("div");
-      replyDiv.className = "msg jarvis";
-      const label = document.createElement("span");
-      label.className = "who";
-      label.textContent = "JARVIS";
-      replyDiv.appendChild(label);
+    // Create the reply bubble with status container ABOVE text
+    const replyDiv = document.createElement("div");
+    replyDiv.className = "msg jarvis";
+    const label = document.createElement("span");
+    label.className = "who";
+    label.textContent = "JARVIS";
+    replyDiv.appendChild(label);
 
-      // Status container (appears above text)
-      const statusContainer = document.createElement("div");
-      statusContainer.style.fontSize = "11px";
-      statusContainer.style.color = "var(--muted)";
-      statusContainer.style.fontStyle = "italic";
-      statusContainer.style.marginBottom = "4px";
-      replyDiv.appendChild(statusContainer);
+    // Status container (appears above text)
+    const statusContainer = document.createElement("div");
+    statusContainer.style.fontSize = "11px";
+    statusContainer.style.color = "var(--muted)";
+    statusContainer.style.fontStyle = "italic";
+    statusContainer.style.marginBottom = "4px";
+    replyDiv.appendChild(statusContainer);
 
-      // Text content goes here
-      const textSpan = document.createElement("span");
-      replyDiv.appendChild(textSpan);
+    // Text content goes here
+    const textSpan = document.createElement("span");
+    replyDiv.appendChild(textSpan);
 
-      transcript.appendChild(replyDiv);
-      transcript.scrollTop = transcript.scrollHeight;
+    transcript.appendChild(replyDiv);
+    transcript.scrollTop = transcript.scrollHeight;
 
-      try {
-        const res = await fetch("/api/command/stream", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ text }),
-        });
+    try {
+      const res = await fetch("/api/command/stream", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
 
-        const reader = res.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-        let fullReply = "";
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullReply = "";
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
 
-          const events = buffer.split("\n\n");
-          buffer = events.pop();
+        const events = buffer.split("\n\n");
+        buffer = events.pop();
 
-          for (const event of events) {
-            if (!event.startsWith("data: ")) continue;
-            let payload;
-            try {
-              payload = JSON.parse(event.slice(6));
-            } catch (e) { continue; }
-
-            if (payload.kind === "content") {
-              fullReply += payload.text;
-              textSpan.textContent = fullReply;
-              transcript.scrollTop = transcript.scrollHeight;
-              } else if (payload.kind === "status") {
-              const statusLine = document.createElement("div");
-              statusLine.textContent = payload.text;
-              statusContainer.appendChild(statusLine);
-            }
-                        } else if (payload.kind === "done") {
-              setState("speaking");
-              setTimeout(() => {
-                setState("");
-                // Hide the [Calling X...] status after the reply is spoken
-                statusContainer.style.display = "none";
-              }, estimateSpeechMs(fullReply));
-            }
-            } else if (payload.kind === "exit") {
-              textSpan.textContent = "Goodbye.";
-              setTimeout(() => {
-                input.disabled = true;
-                sendBtn.disabled = true;
-                micBtn.disabled = true;
-                input.placeholder = "SESSION ENDED — REFRESH TO RESTART";
-                setState("");
-              }, estimateSpeechMs("Goodbye."));
+        for (const event of events) {
+          if (!event.startsWith("data: ")) continue;
+          let payload;
+          try {
+            payload = JSON.parse(event.slice(6));
+          } catch (e) { continue; }
+          if (payload.kind === "content") {
+            if (payload.text === "__CLEAR__") {
+              while (transcript.firstChild) {
+                transcript.removeChild(transcript.firstChild);
+              }
+              const resetMsg = document.createElement("div");
+              resetMsg.className = "msg jarvis";
+              resetMsg.innerHTML = '<span class="who">JARVIS</span>Session cleared. Ready.';
+              transcript.appendChild(resetMsg);
+              replyDiv.remove();
               return;
-            } else if (payload.kind === "error") {
-              textSpan.textContent = "Error: " + payload.text;
-              setState("error");
-              setTimeout(() => setState(""), 1500);
             }
+            fullReply += payload.text;
+            textSpan.textContent = fullReply;
+            transcript.scrollTop = transcript.scrollHeight;
+          }
+          else if (payload.kind === "status") {
+            const statusLine = document.createElement("div");
+            statusLine.textContent = payload.text;
+            statusContainer.appendChild(statusLine);
+          } else if (payload.kind === "done") {
+            setState("speaking");
+            setTimeout(() => {
+              setState("");
+              statusContainer.style.display = "none";
+            }, estimateSpeechMs(fullReply));
+          } else if (payload.kind === "exit") {
+            textSpan.textContent = "Goodbye.";
+            setTimeout(() => {
+              input.disabled = true;
+              sendBtn.disabled = true;
+              micBtn.disabled = true;
+              input.placeholder = "SESSION TERMINATED — REFRESH TO REBOOT";
+              setState("");
+            }, estimateSpeechMs("Goodbye."));
+            return;
+          } else if (payload.kind === "error") {
+            textSpan.textContent = "Error: " + payload.text;
+            setState("error");
+            setTimeout(() => setState(""), 1500);
           }
         }
-      } catch (e) {
-        textSpan.textContent = "Network error: " + e.message;
-        setState("error");
-        setTimeout(() => setState(""), 1500);
       }
+    } catch (e) {
+      textSpan.textContent = "Network error: " + e.message;
+      setState("error");
+      setTimeout(() => setState(""), 1500);
     }
-
-  const sendcommand = sendCommand;
-  window.sendcommand = sendCommand;
+  }
 
   async function triggerVoice() {
     micBtn.disabled = true;
@@ -1408,37 +1378,94 @@
 
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      sendCommand(input.value);
+        e.preventDefault();
+        const cmd = input.value;
+        pushHistory(cmd);
+        sendCommand(cmd);
+    } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        handleArrow(e);
+    } else if (e.key === "Tab") {
+        handleTab(e);
     }
-  });
-  sendBtn.addEventListener("click", () => sendCommand(input.value));
-  micBtn.addEventListener("click", triggerVoice);
+});
 
-  input.focus();
-    // ---- Poll for wake-word conversations every second ----
-    setInterval(async () => {
-      try {
-        const res = await fetch("/api/events");
-        const data = await res.json();
-        if (data.events && data.events.length > 0) {
-          for (const ev of data.events) {
-            addMessage("You", ev.user);
-            addMessage("JARVIS", ev.reply);
-            logActivity("&gt; " + ev.user.slice(0, 26), true);
-            bumpCount();
-          }
-          setState("speaking");
-          setTimeout(() => setState(""), 1800);
-        }
-      } catch (e) {
-        // server busy — ignore and retry next second
-      }
-    }, 1000);
   // ============ Boot sequence ============
   setTimeout(() => {
     document.getElementById("boot").classList.add("hide");
   }, 2900);
+  // ============ Command history + tab completion ============
+const commandHistory = [];
+let historyIndex = -1;
+
+const SLASH_COMPLETIONS = [
+    "/w ", "/weather ", "/s ", "/search ", "/n ", "/news ",
+    "/p ", "/play ", "/stop", "/t ", "/translate ", "/wiki ",
+    "/c ", "/calc ", "/note ", "/remind ", "/screen ",
+    "/read", "/error", "/index ", "/ask ", "/clear", "/help",
+];
+
+const WORD_COMPLETIONS = {
+    "wea": "what's the weather in ",
+    "sea": "search for ",
+    "play": "play ",
+    "tran": "translate ",
+    "news": "latest news about ",
+    "note": "take a note: ",
+    "remind": "remind me ",
+    "wiki": "tell me about ",
+    "calc": "what's ",
+    "help": "/help",
+    "clear": "/clear",
+};
+
+function handleTab(e) {
+    const val = input.value;
+    if (!val.startsWith("/")) {
+        const firstWord = val.split(" ")[0].toLowerCase();
+        if (WORD_COMPLETIONS[firstWord] && val.split(" ").length === 1) {
+            input.value = WORD_COMPLETIONS[firstWord];
+            e.preventDefault();
+        }
+        return;
+    }
+    const matches = SLASH_COMPLETIONS.filter(c => c.startsWith(val));
+    if (matches.length === 1) {
+        input.value = matches[0];
+        e.preventDefault();
+    } else if (matches.length > 1) {
+        console.log("Completions:", matches);
+        e.preventDefault();
+    }
+}
+
+function pushHistory(cmd) {
+    if (!cmd.trim()) return;
+    if (commandHistory[commandHistory.length - 1] !== cmd) {
+        commandHistory.push(cmd);
+        if (commandHistory.length > 100) commandHistory.shift();
+    }
+    historyIndex = -1;
+}
+
+function handleArrow(e) {
+    if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (commandHistory.length === 0) return;
+        if (historyIndex === -1) historyIndex = commandHistory.length - 1;
+        else if (historyIndex > 0) historyIndex--;
+        input.value = commandHistory[historyIndex];
+    } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (historyIndex === -1) return;
+        if (historyIndex < commandHistory.length - 1) {
+            historyIndex++;
+            input.value = commandHistory[historyIndex];
+        } else {
+            historyIndex = -1;
+            input.value = "";
+        }
+    }
+}
 </script>
 
 </body>

@@ -2,7 +2,7 @@
 
 Run with: python jarvis.py
 """
-
+import slash_commands
 import input_handler
 from voice import listen_voice, speak
 from tools import (
@@ -149,9 +149,25 @@ def execute_tool(name: str, args: dict) -> str:
 
 def think_stream(user_text: str):
     """Yield (kind, text) tuples for a user command."""
+    # ---- Slash command handling ----
+    if slash_commands.is_clear(user_text):
+        yield ("content", "__CLEAR__")
+        return
+
+    if slash_commands.is_help(user_text):
+        yield ("content", slash_commands.get_help())
+        return
+
+    if slash_commands.is_stop(user_text):
+        yield ("content", _stop_all_music())
+        return
+
+    # Expand /shortcut → full command before anything else
+    user_text = slash_commands.expand(user_text)
+
     text = user_text.lower().strip()
 
-    # Fast-path: stop music
+    # Fast-path: stop music (plain text form)
     if text in STOP_MUSIC_PHRASES:
         yield ("content", _stop_all_music())
         return
