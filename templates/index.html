@@ -389,8 +389,13 @@
     font-size: 9px;
   }
   .activity-item.hot { color: var(--fg); }
+    .activity-item.hot { color: var(--fg); }
   .activity-item.hot::before {
-    .ref-group {
+    background: var(--gold);
+    box-shadow: 0 0 6px var(--gold);
+  }
+
+  .ref-group {
     font-size: 8.5px;
     letter-spacing: 0.35em;
     color: var(--gold);
@@ -406,15 +411,11 @@
     position: absolute;
     left: 0;
     top: 50%;
-    transform: translateY(-50%);
     width: 4px;
     height: 4px;
     background: var(--gold);
     box-shadow: 0 0 6px var(--gold-glow);
     transform: translateY(-50%) rotate(45deg);
-  }
-    background: var(--gold);
-    box-shadow: 0 0 6px var(--gold);
   }
 
   /* ============ CENTER ============ */
@@ -1255,55 +1256,108 @@
   }
 
   // ============ Commands ============
-  async function sendCommand(text) {
-    if (!text.trim()) return;
-    input.value = "";
-    addMessage("You", text);
-    logActivity("&gt; " + text.slice(0, 26) + (text.length > 26 ? "..." : ""), true);
-    bumpCount();
-    setState("thinking");
+      async function sendCommand(text) {
+      if (!text.trim()) return;
+      input.value = "";
+      addMessage("You", text);
+      logActivity("&gt; " + text.slice(0, 26), true);
+      bumpCount();
+      setState("thinking");
 
-    try {
-      const res = await fetch("/api/command", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
-      });
-      const data = await res.json();
+      // Create the reply bubble immediately so text can stream into it
+            // Create the reply bubble with status container ABOVE text
+      const replyDiv = document.createElement("div");
+      replyDiv.className = "msg jarvis";
+      const label = document.createElement("span");
+      label.className = "who";
+      label.textContent = "JARVIS";
+      replyDiv.appendChild(label);
 
-      if (data.error) {
-        addMessage("JARVIS", "Error: " + data.error);
+      // Status container (appears above text)
+      const statusContainer = document.createElement("div");
+      statusContainer.style.fontSize = "11px";
+      statusContainer.style.color = "var(--muted)";
+      statusContainer.style.fontStyle = "italic";
+      statusContainer.style.marginBottom = "4px";
+      replyDiv.appendChild(statusContainer);
+
+      // Text content goes here
+      const textSpan = document.createElement("span");
+      replyDiv.appendChild(textSpan);
+
+      transcript.appendChild(replyDiv);
+      transcript.scrollTop = transcript.scrollHeight;
+
+      try {
+        const res = await fetch("/api/command/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let fullReply = "";
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const events = buffer.split("\n\n");
+          buffer = events.pop();
+
+          for (const event of events) {
+            if (!event.startsWith("data: ")) continue;
+            let payload;
+            try {
+              payload = JSON.parse(event.slice(6));
+            } catch (e) { continue; }
+
+            if (payload.kind === "content") {
+              fullReply += payload.text;
+              textSpan.textContent = fullReply;
+              transcript.scrollTop = transcript.scrollHeight;
+              } else if (payload.kind === "status") {
+              const statusLine = document.createElement("div");
+              statusLine.textContent = payload.text;
+              statusContainer.appendChild(statusLine);
+            }
+                        } else if (payload.kind === "done") {
+              setState("speaking");
+              setTimeout(() => {
+                setState("");
+                // Hide the [Calling X...] status after the reply is spoken
+                statusContainer.style.display = "none";
+              }, estimateSpeechMs(fullReply));
+            }
+            } else if (payload.kind === "exit") {
+              textSpan.textContent = "Goodbye.";
+              setTimeout(() => {
+                input.disabled = true;
+                sendBtn.disabled = true;
+                micBtn.disabled = true;
+                input.placeholder = "SESSION ENDED — REFRESH TO RESTART";
+                setState("");
+              }, estimateSpeechMs("Goodbye."));
+              return;
+            } else if (payload.kind === "error") {
+              textSpan.textContent = "Error: " + payload.text;
+              setState("error");
+              setTimeout(() => setState(""), 1500);
+            }
+          }
+        }
+      } catch (e) {
+        textSpan.textContent = "Network error: " + e.message;
         setState("error");
         setTimeout(() => setState(""), 1500);
-        return;
       }
-
-      addMessage("JARVIS", data.reply);
-
-      if (data.exit) {
-        setState("speaking");
-        setTimeout(() => {
-          input.disabled = true;
-          sendBtn.disabled = true;
-          micBtn.disabled = true;
-          input.placeholder = "SESSION TERMINATED — REFRESH TO REBOOT";
-          setState("");
-        }, estimateSpeechMs(data.reply));
-        return;
-      }
-
-      if (data.speak) {
-        setState("speaking");
-        setTimeout(() => setState(""), estimateSpeechMs(data.reply));
-      } else {
-        setState("");
-      }
-    } catch (e) {
-      addMessage("JARVIS", "Network error: " + e.message);
-      setState("error");
-      setTimeout(() => setState(""), 1500);
     }
-  }
+
+  const sendcommand = sendCommand;
+  window.sendcommand = sendCommand;
 
   async function triggerVoice() {
     micBtn.disabled = true;

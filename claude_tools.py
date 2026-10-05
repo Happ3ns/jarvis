@@ -151,13 +151,16 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "get_weather",
-            "description": "Get current weather for a city",
+            "description": "Get current weather for a city. Defaults to Kanpur if no city is given.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "city": {"type": "string", "description": "City name"}
+                    "city": {
+                        "type": "string",
+                        "description": "City name. Optional — defaults to Kanpur.",
+                    }
                 },
-                "required": ["city"],
+                "required": [],
             },
         },
     },

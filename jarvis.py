@@ -1,4 +1,4 @@
-"""JARVIS — voice assistant entry point.
+"""JARVIS — voice assistant entry point with streaming responses.
 
 Run with: python jarvis.py
 """
@@ -28,38 +28,27 @@ from screen_vision import (
     analyze_screen, read_screen_text, explain_screen_error, translate_screen,
 )
 from document_rag import index_folder, ask_documents, clear_index
-from brain import ask as llm_ask
+from brain import ask_stream
 
 
 QUIET_PREFIX = "__QUIET__"
 
 STOP_MUSIC_PHRASES = {
-    "stop",
-    "stop music",
-    "stop the music",
-    "stop playing",
-    "stop youtube",
-    "stop the song",
-    "stop the song please",
-    "kill the music",
-    "pause the music",
-    "pause music",
-    "shut the music",
-    "stop the audio",
+    "stop", "stop music", "stop the music", "stop playing",
+    "stop youtube", "stop the song", "stop the song please",
+    "kill the music", "pause the music", "pause music",
+    "shut the music", "stop the audio",
 }
 
 
 def _stop_all_music() -> str:
-    """Stop YouTube (mpv) and pause Spotify, whichever is playing."""
     stopped_anything = False
-
     try:
         result = stop_youtube()
         if "Nothing is playing" not in result:
             stopped_anything = True
     except Exception:
         pass
-
     try:
         sp = get_spotify_client()
         if sp is not None:
@@ -67,21 +56,15 @@ def _stop_all_music() -> str:
             stopped_anything = True
     except Exception:
         pass
-
-    if stopped_anything:
-        return "Music stopped."
-    return "Nothing is playing."
+    return "Music stopped." if stopped_anything else "Nothing is playing."
 
 
 def execute_tool(name: str, args: dict) -> str:
-    """Route LLM tool calls to the actual Python functions."""
     args = args or {}
     try:
-        # ---------- Vision ----------
+        # Vision
         if name == "analyze_screen":
-            return analyze_screen(
-                args.get("question", "What's on this screen? Be brief.")
-            )
+            return analyze_screen(args.get("question", "What's on this screen? Be brief."))
         if name == "read_screen_text":
             return read_screen_text()
         if name == "explain_screen_error":
@@ -89,7 +72,7 @@ def execute_tool(name: str, args: dict) -> str:
         if name == "translate_screen":
             return translate_screen(args.get("target_lang", "English"))
 
-        # ---------- RAG ----------
+        # RAG
         if name == "index_folder":
             return index_folder(args["folder_path"])
         if name == "ask_documents":
@@ -97,7 +80,7 @@ def execute_tool(name: str, args: dict) -> str:
         if name == "clear_index":
             return clear_index()
 
-        # ---------- Music ----------
+        # Music
         if name == "play_on_youtube":
             return play_on_youtube(args["query"])
         if name == "stop_youtube":
@@ -105,9 +88,9 @@ def execute_tool(name: str, args: dict) -> str:
         if name == "play_on_spotify":
             return play_on_spotify(args["query"])
 
-        # ---------- Info ----------
+        # Info
         if name == "get_weather":
-            return get_weather(args["city"])
+            return get_weather(args.get("city", "Kanpur"))
         if name == "search_web":
             return search_web(args["query"])
         if name == "search_wikipedia":
@@ -125,13 +108,13 @@ def execute_tool(name: str, args: dict) -> str:
         if name == "search_news":
             return search_news(args["query"])
 
-        # ---------- Launchers ----------
+        # Launchers
         if name == "open_app":
             return open_app(args["app_name"])
         if name == "open_website":
             return open_website(args["site"])
 
-        # ---------- Productivity ----------
+        # Productivity
         if name == "take_screenshot":
             return take_screenshot()
         if name == "send_email":
@@ -145,7 +128,7 @@ def execute_tool(name: str, args: dict) -> str:
         if name == "set_reminder":
             return set_reminder(args["seconds"], args["message"], speak_fn=speak)
 
-        # ---------- Utilities ----------
+        # Utilities
         if name == "flip_coin":
             return flip_coin()
         if name == "roll_dice":
@@ -164,30 +147,37 @@ def execute_tool(name: str, args: dict) -> str:
         return f"Tool error: {e}"
 
 
-def think(user_text: str) -> str:
+def think_stream(user_text: str):
+    """Yield (kind, text) tuples for a user command."""
     text = user_text.lower().strip()
 
-    # Fast-path: stop music (no LLM)
+    # Fast-path: stop music
     if text in STOP_MUSIC_PHRASES:
-        return _stop_all_music()
+        yield ("content", _stop_all_music())
+        return
 
     # Fast-path: memory commands
     if any(p in text for p in ["what did i just ask", "repeat my question"]):
-        return recall_last_question()
+        yield ("content", recall_last_question())
+        return
     if any(p in text for p in ["what did you just say", "repeat that", "say that again"]):
-        return recall_last_reply()
+        yield ("content", recall_last_reply())
+        return
     if any(p in text for p in ["clear history", "clear memory", "forget everything"]):
-        return clear_memory()
+        yield ("content", clear_memory())
+        return
 
-    # Everything else goes through the LLM
-    return llm_ask(user_text, execute_tool)
+    # LLM streaming
+    yield from ask_stream(user_text, execute_tool)
 
 
-def handle_reply(reply: str) -> None:
-    if reply.startswith(QUIET_PREFIX):
-        speak(reply[len(QUIET_PREFIX):], quiet=True)
-    else:
-        speak(reply)
+def think(user_text: str) -> str:
+    """Non-streaming compatibility wrapper for app.py."""
+    full = ""
+    for kind, chunk in think_stream(user_text):
+        if kind == "content":
+            full += chunk
+    return full
 
 
 def main():
@@ -199,21 +189,38 @@ def main():
             if item is None:
                 continue
             source, text = item
+
             if source == "voice":
                 speak("Listening...")
                 user_text = listen_voice()
             else:
-                print(f"You (typed): {text}")
+                print(f"\nYou (typed): {text}")
                 user_text = text
+
             if not user_text:
                 continue
+
             if any(w in user_text.lower() for w in
                    ["exit", "goodbye", "shut down", "quit"]):
                 speak("Shutting down.")
                 break
-            reply = think(user_text)
-            remember(user_text, reply)
-            handle_reply(reply)
+
+            # Stream the reply to the terminal
+            full_reply = ""
+            print("JARVIS: ", end="", flush=True)
+            for kind, chunk in think_stream(user_text):
+                if kind == "content":
+                    print(chunk, end="", flush=True)
+                    full_reply += chunk
+                elif kind == "status":
+                    print(f"\n  {chunk}", end="", flush=True)
+            print()
+
+            remember(user_text, full_reply)
+
+            if not full_reply.startswith(QUIET_PREFIX):
+                speak(full_reply)
+
     except KeyboardInterrupt:
         speak("Interrupted. Goodbye.")
     finally:

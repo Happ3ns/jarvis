@@ -1,23 +1,20 @@
-"""Web UI for JARVIS — Flask server that wraps think() and the tools."""
+"""Web UI for JARVIS — Flask server with streaming support."""
 
-from flask import Flask, render_template, request, jsonify
+import json
 
-from jarvis import think, QUIET_PREFIX
+from flask import Flask, render_template, request, jsonify, Response
+
+from jarvis import think_stream, QUIET_PREFIX
 from voice import listen_voice, speak
 from advanced import remember
 
 app = Flask(__name__)
 
-# NOTE: "stop" is intentionally NOT in this list.
-# "stop" means "stop the music" — it should route to think(), not exit.
 EXIT_WORDS = ["exit", "goodbye", "shut down", "quit"]
 
 
 def _is_exit(text: str) -> bool:
-    lowered = text.lower().strip()
-    # Only match if the ENTIRE command is an exit word,
-    # so "stop the music" doesn't accidentally trigger exit
-    return lowered in EXIT_WORDS
+    return text.lower().strip() in EXIT_WORDS
 
 
 @app.route("/")
@@ -27,6 +24,7 @@ def index():
 
 @app.route("/api/command", methods=["POST"])
 def command():
+    """Non-streaming endpoint (kept for compatibility)."""
     data = request.get_json() or {}
     user_text = (data.get("text") or "").strip()
     if not user_text:
@@ -35,27 +33,71 @@ def command():
     if _is_exit(user_text):
         speak("Goodbye.")
         return jsonify({
-            "user": user_text,
-            "reply": "Goodbye.",
-            "speak": True,
-            "exit": True,
+            "user": user_text, "reply": "Goodbye.",
+            "speak": True, "exit": True,
         })
 
-    reply = think(user_text)
-    quiet = reply.startswith(QUIET_PREFIX)
-    if quiet:
-        reply = reply[len(QUIET_PREFIX):]
-    else:
-        speak(reply)
+    full_reply = ""
+    for kind, chunk in think_stream(user_text):
+        if kind == "content":
+            full_reply += chunk
 
+    quiet = full_reply.startswith(QUIET_PREFIX)
+    reply = full_reply[len(QUIET_PREFIX):] if quiet else full_reply
+    if not quiet:
+        speak(reply)
     remember(user_text, reply)
 
     return jsonify({
-        "user": user_text,
-        "reply": reply,
-        "speak": not quiet,
-        "exit": False,
+        "user": user_text, "reply": reply,
+        "speak": not quiet, "exit": False,
     })
+
+
+@app.route("/api/command/stream", methods=["POST"])
+def command_stream():
+    """Streaming endpoint — sends tokens as they're generated."""
+    data = request.get_json() or {}
+    user_text = (data.get("text") or "").strip()
+    if not user_text:
+        return jsonify({"error": "empty command"}), 400
+
+    def generate():
+        if _is_exit(user_text):
+            speak("Goodbye.")
+            yield f"data: {json.dumps({'kind': 'exit', 'reply': 'Goodbye.'})}\n\n"
+            return
+
+        full_reply = ""
+        try:
+            for kind, chunk in think_stream(user_text):
+                if kind == "content":
+                    full_reply += chunk
+                    yield f"data: {json.dumps({'kind': 'content', 'text': chunk})}\n\n"
+                elif kind == "status":
+                    yield f"data: {json.dumps({'kind': 'status', 'text': chunk})}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'kind': 'error', 'text': str(e)})}\n\n"
+            return
+
+        quiet = full_reply.startswith(QUIET_PREFIX)
+        reply = full_reply[len(QUIET_PREFIX):] if quiet else full_reply
+
+        # Speak AFTER all text has streamed to the browser
+        if not quiet:
+            speak(reply)
+        remember(user_text, reply)
+
+        yield f"data: {json.dumps({'kind': 'done', 'reply': reply, 'speak': not quiet})}\n\n"
+
+    return Response(
+        generate(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.route("/api/voice", methods=["POST"])
@@ -67,26 +109,24 @@ def voice():
     if _is_exit(user_text):
         speak("Goodbye.")
         return jsonify({
-            "user": user_text,
-            "reply": "Goodbye.",
-            "speak": True,
-            "exit": True,
+            "user": user_text, "reply": "Goodbye.",
+            "speak": True, "exit": True,
         })
 
-    reply = think(user_text)
-    quiet = reply.startswith(QUIET_PREFIX)
-    if quiet:
-        reply = reply[len(QUIET_PREFIX):]
-    else:
-        speak(reply)
+    full_reply = ""
+    for kind, chunk in think_stream(user_text):
+        if kind == "content":
+            full_reply += chunk
 
+    quiet = full_reply.startswith(QUIET_PREFIX)
+    reply = full_reply[len(QUIET_PREFIX):] if quiet else full_reply
+    if not quiet:
+        speak(reply)
     remember(user_text, reply)
 
     return jsonify({
-        "user": user_text,
-        "reply": reply,
-        "speak": not quiet,
-        "exit": False,
+        "user": user_text, "reply": reply,
+        "speak": not quiet, "exit": False,
     })
 
 
