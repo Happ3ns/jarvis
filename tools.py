@@ -12,6 +12,7 @@ from pathlib import Path
 
 # ---------- Info tools ----------
 
+
 def get_weather(city: str) -> str:
     try:
         geo = requests.get(

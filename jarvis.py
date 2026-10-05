@@ -5,6 +5,7 @@ Run with: python jarvis.py
 from code_runner import run_code, compute, analyze_file
 import browser_control
 import memory
+import agents
 import slash_commands
 import input_handler
 from voice import listen_voice, speak
@@ -65,6 +66,10 @@ def _stop_all_music() -> str:
 def execute_tool(name: str, args: dict) -> str:
     args = args or {}
     try:
+        if name == "spawn_agents":
+            return agents.spawn_agents(args["tasks"], execute_tool)
+        if name == "list_agent_roles":
+            return agents.list_roles()
                 # Browser automation
         if name == "open_url":
             return browser_control.open_url(args["url"])

@@ -1222,7 +1222,7 @@
   }
 
   // ============ Commands ============
-  async function sendCommand(text) {
+    async function sendCommand(text) {
     if (!text.trim()) return;
     input.value = "";
     addMessage("You", text);
@@ -1230,15 +1230,16 @@
     bumpCount();
     setState("thinking");
 
-    // Create the reply bubble with status container ABOVE text
+    // Reply bubble with status ABOVE text
     const replyDiv = document.createElement("div");
     replyDiv.className = "msg jarvis";
+
     const label = document.createElement("span");
     label.className = "who";
     label.textContent = "JARVIS";
     replyDiv.appendChild(label);
 
-    // Status container (appears above text)
+    // Status container (above text)
     const statusContainer = document.createElement("div");
     statusContainer.style.fontSize = "11px";
     statusContainer.style.color = "var(--muted)";
@@ -1246,7 +1247,13 @@
     statusContainer.style.marginBottom = "4px";
     replyDiv.appendChild(statusContainer);
 
-    // Text content goes here
+    // Plan block (filled only if the reply starts with a plan)
+    const planBlock = document.createElement("div");
+    planBlock.style.display = "none";
+    planBlock.style.cssText = "display:none; background: rgba(255,179,71,0.06); border-left: 2px solid var(--gold); padding: 10px 14px; margin-bottom: 10px; font-size: 11.5px; color: var(--gold); line-height: 1.6; white-space: pre-wrap;";
+    replyDiv.appendChild(planBlock);
+
+    // Text content
     const textSpan = document.createElement("span");
     replyDiv.appendChild(textSpan);
 
@@ -1279,7 +1286,13 @@
           try {
             payload = JSON.parse(event.slice(6));
           } catch (e) { continue; }
-          if (payload.kind === "content") {
+
+          if (payload.kind === "plan") {
+            planBlock.style.display = "block";
+            planBlock.textContent += payload.text;
+            transcript.scrollTop = transcript.scrollHeight;
+
+          } else if (payload.kind === "content") {
             if (payload.text === "__CLEAR__") {
               while (transcript.firstChild) {
                 transcript.removeChild(transcript.firstChild);
@@ -1294,17 +1307,20 @@
             fullReply += payload.text;
             textSpan.textContent = fullReply;
             transcript.scrollTop = transcript.scrollHeight;
-          }
-          else if (payload.kind === "status") {
+
+          } else if (payload.kind === "status") {
             const statusLine = document.createElement("div");
             statusLine.textContent = payload.text;
             statusContainer.appendChild(statusLine);
+            transcript.scrollTop = transcript.scrollHeight;
+
           } else if (payload.kind === "done") {
             setState("speaking");
             setTimeout(() => {
               setState("");
               statusContainer.style.display = "none";
             }, estimateSpeechMs(fullReply));
+
           } else if (payload.kind === "exit") {
             textSpan.textContent = "Goodbye.";
             setTimeout(() => {
@@ -1315,6 +1331,7 @@
               setState("");
             }, estimateSpeechMs("Goodbye."));
             return;
+
           } else if (payload.kind === "error") {
             textSpan.textContent = "Error: " + payload.text;
             setState("error");

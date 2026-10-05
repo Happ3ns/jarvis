@@ -75,6 +75,9 @@ def command_stream():
                 if kind == "content":
                     full_reply += chunk
                     yield f"data: {json.dumps({'kind': 'content', 'text': chunk})}\n\n"
+                elif kind == "plan":
+                    full_reply += chunk
+                    yield f"data: {json.dumps({'kind': 'plan', 'text': chunk})}\n\n"
                 elif kind == "status":
                     yield f"data: {json.dumps({'kind': 'status', 'text': chunk})}\n\n"
         except Exception as e:

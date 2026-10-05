@@ -1,6 +1,7 @@
 """Tool schemas for LLM tool-calling (JARVIS)."""
 
 TOOLS = [
+    
         # ---------- Browser automation ----------
     {
         "type": "function",

@@ -9,4 +9,8 @@ notes.txt
 token.json
 memory.db
 memory.db-journal
-.playwright/
+.playwright/models/
+test_*.py
+list_devices.py
+fix_css.py
+*.backup
