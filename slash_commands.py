@@ -6,6 +6,9 @@ to full commands before being sent to the LLM, saving typing.
 
 # Mapping of /shortcut → full command prefix
 SLASH_COMMANDS = {
+     "/tools":    "list learned tools",
+    "/learned":  "show source of learned tool",
+    "/forget-tool": "delete learned tool",
     "/yt":        "search youtube for",
     "/google":    "search google for",
     "/browse":    "open url",
@@ -39,6 +42,9 @@ SLASH_COMMANDS = {
 
 
 HELP_TEXT = (
+    "/tools - list learned tools | "
+    "/learned [name] - show source | "
+    "/forget-tool [name] - delete | "
     "Slash commands: "
     "/remember [text] — save a fact | "
     "/memory — recall facts | "
@@ -111,3 +117,34 @@ def is_stop(text: str) -> bool:
 def get_help() -> str:
     """Return the help text."""
     return HELP_TEXT
+
+def is_tools_command(text: str) -> bool:
+    return text.strip().lower() in ("/tools", "list learned tools")
+
+
+def is_learned_command(text: str) -> bool:
+    return text.strip().lower().startswith("/learned ")
+
+
+def is_forget_tool_command(text: str) -> bool:
+    return text.strip().lower().startswith("/forget-tool ")
+
+
+def handle_special_commands(text: str):
+    """Return a response string for /tools, /learned X, /forget-tool X, or None."""
+    import self_extension
+
+    stripped = text.strip()
+
+    if stripped.lower() == "/tools":
+        return self_extension.list_learned()
+
+    if stripped.lower().startswith("/learned "):
+        name = stripped[len("/learned "):].strip()
+        return self_extension.show_tool(name)
+
+    if stripped.lower().startswith("/forget-tool "):
+        name = stripped[len("/forget-tool "):].strip()
+        return self_extension.delete_tool(name)
+
+    return None

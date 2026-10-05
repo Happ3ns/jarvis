@@ -1,6 +1,63 @@
 """Tool schemas for LLM tool-calling (JARVIS)."""
-
+import self_extension
 TOOLS = [
+        {
+        "type": "function",
+        "function": {
+            "name": "create_tool",
+            "description": (
+                "Create a new tool permanently when NO existing tool can "
+                "handle the user's request. Use ONLY as a last resort — "
+                "always check the tools list first. The tool will be tested "
+                "in a sandbox; if tests fail, fix the code and retry. "
+                "The tool becomes available to all future sessions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": (
+                            "Function name — lowercase letters, numbers, "
+                            "underscores only. Must match the def name in code."
+                        ),
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "What the tool does, in one sentence.",
+                    },
+                    "code": {
+                        "type": "string",
+                        "description": (
+                            "The complete Python function. Must be named "
+                            "exactly <name> and return a string. "
+                            "Blocked imports: os.system, subprocess, socket, "
+                            "eval, exec, requests.post."
+                        ),
+                    },
+                    "parameters": {
+                        "type": "object",
+                        "description": (
+                            "JSON schema for the function's parameters, "
+                            "in OpenAI format: {type: 'object', properties: "
+                            "{arg: {type: 'string', description: '...'}}, "
+                            "required: ['arg']}"
+                        ),
+                    },
+                    "test_code": {
+                        "type": "string",
+                        "description": (
+                            "Python code that calls the function on small "
+                            "sample data and prints the result. Used to "
+                            "verify the tool works before saving."
+                        ),
+                    },
+                },
+                "required": ["name", "description", "code",
+                             "parameters", "test_code"],
+            },
+        },
+    },
     
         # ---------- Browser automation ----------
     {
@@ -661,3 +718,8 @@ TOOLS = [
         },
     },
 ]
+# ---- Auto-load learned tools and add their schemas ----
+_learned_schemas = self_extension.load_learned_schemas()
+if _learned_schemas:
+    TOOLS.extend(_learned_schemas)
+    print(f"[claude_tools] Loaded {len(_learned_schemas)} learned tool schema(s)")

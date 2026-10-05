@@ -5,6 +5,7 @@ Run with: python jarvis.py
 from code_runner import run_code, compute, analyze_file
 import browser_control
 import memory
+import self_extension
 import agents
 import slash_commands
 import input_handler
@@ -66,6 +67,23 @@ def _stop_all_music() -> str:
 def execute_tool(name: str, args: dict) -> str:
     args = args or {}
     try:
+                # Self-extension
+        if name == "create_tool":
+            return self_extension.create_tool(
+                name=args["name"],
+                description=args["description"],
+                code=args["code"],
+                parameters=args["parameters"],
+                test_code=args["test_code"],
+            )
+
+        # Dispatch to learned tools
+        learned = self_extension.load_learned_tools()
+        if name in learned:
+            try:
+                return str(learned[name](**args))
+            except Exception as e:
+                return f"Tool '{name}' error: {e}"
         if name == "spawn_agents":
             return agents.spawn_agents(args["tasks"], execute_tool)
         if name == "list_agent_roles":
@@ -197,6 +215,12 @@ def execute_tool(name: str, args: dict) -> str:
 
 def think_stream(user_text: str):
     """Yield (kind, text) tuples for a user command."""
+    # ---- Learned-tool management (/tools, /learned X, /forget-tool X) ----
+    special = slash_commands.handle_special_commands(user_text)
+    if special is not None:
+        yield ("content", special)
+        return
+
     # ---- Slash command handling ----
     if slash_commands.is_clear(user_text):
         yield ("content", "__CLEAR__")
@@ -233,7 +257,6 @@ def think_stream(user_text: str):
 
     # LLM streaming
     yield from ask_stream(user_text, execute_tool)
-
 
 def think(user_text: str) -> str:
     """Non-streaming compatibility wrapper for app.py."""
