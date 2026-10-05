@@ -51,6 +51,12 @@ SYSTEM_PROMPT = (
     "to write and save a new tool. Write clean, minimal code. Include a "
     "small test_code that exercises the function. "
 
+    "If the user asks for something NO existing tool can do, use create_tool "
+    "to write and save a new tool. Write SHORT code — ideally under 30 lines. "
+    "Use single quotes for strings inside the code. Avoid triple-quoted "
+    "strings and regex patterns with many escapes. Include a small "
+    "test_code that exercises the function. "
+
     "Format itineraries, plans, and step-by-step lists as markdown with "
     "each step or day as its own line, using bold for time slots "
     "(**Morning**, **Afternoon**) and bullets for activities. "
@@ -71,7 +77,7 @@ SYSTEM_PROMPT = (
 
 
 def _call_with_fallback(messages, stream: bool = False, _retry: bool = False):
-    """Try each model in order. On tool validation errors, retry once
+    """Try each model in order. On tool validation or JSON errors, retry once
     with a corrective system message and lower temperature."""
     last_error = None
     for client, model in MODELS:
@@ -81,24 +87,34 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False):
                 messages=messages,
                 tools=TOOLS,
                 tool_choice="auto",
-                max_tokens=512,
+                max_tokens=4096,
                 temperature=0.05 if _retry else 0.3,
                 stream=stream,
             )
         except Exception as e:
             err_str = str(e)
+            err_lower = err_str.lower()
 
-            # Retry once on tool validation errors
-            if "tool call validation failed" in err_str.lower() and not _retry:
-                print(f"[brain] {model}: tool validation error — retrying")
+            # Retry once on tool call validation or JSON parse errors
+            needs_retry = (
+                "tool call validation failed" in err_lower
+                or "failed to parse tool call arguments" in err_lower
+            )
+
+            if needs_retry and not _retry:
+                print(f"[brain] {model}: tool JSON error — retrying with correction")
                 corrected = list(messages)
                 corrected.append({
                     "role": "system",
                     "content": (
-                        "REMINDER: Only use tool names from the tools list. "
-                        "Weather tool: 'get_weather'. "
-                        "Search tool: 'search_web'. "
-                        "Do not invent tool names."
+                        "Your previous tool call was invalid — the JSON "
+                        "could not be parsed by the API. This usually means "
+                        "the `code` field was too long or had unescaped "
+                        "characters. Retry with:\n"
+                        "1. Shorter code (under 30 lines if possible)\n"
+                        "2. Use single quotes inside the code for strings\n"
+                        "3. Escape all backslashes as \\\\\n"
+                        "4. No triple-quoted strings inside the code"
                     ),
                 })
                 try:
@@ -267,7 +283,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
         })
 
         for tc in tool_calls_buffer.values():
-            # Reject hallucinated tool names before executing
+            # 1. Reject hallucinated tool names before executing
             if tc["name"] not in VALID_TOOL_NAMES:
                 print(f"[brain] rejected hallucinated tool: {tc['name']}")
                 messages.append({
@@ -280,16 +296,33 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 })
                 continue
 
-            try:
+            # 2. Parse JSON arguments with retry feedback
+        try:
                 args = json.loads(tc["arguments"] or "{}")
-            except json.JSONDecodeError:
-                args = {}
-            yield ("status", f"[Calling {tc['name']}...]")
-            try:
+        except json.JSONDecodeError as e:
+                print(f"[brain] JSON parse failed for {tc['name']}: {e}")
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": (
+                        "Error: your tool call arguments were not valid JSON. "
+                        "This usually happens when the code field is too long "
+                        "or contains unescaped characters. "
+                        "Please retry with shorter code and properly escaped "
+                        "strings (use \\n for newlines)."
+                    ),
+                })
+                continue
+
+            # 3. Execute the tool
+        yield ("status", f"[Calling {tc['name']}...]")
+        try:
                 result = execute_tool_fn(tc["name"], args)
-            except Exception as e:
+        except Exception as e:
                 result = f"Tool error: {e}"
-            messages.append({
+
+            # 4. Feed the result back to the LLM
+        messages.append({
                 "role": "tool",
                 "tool_call_id": tc["id"],
                 "content": str(result),
