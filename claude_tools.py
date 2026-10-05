@@ -723,3 +723,13 @@ _learned_schemas = self_extension.load_learned_schemas()
 if _learned_schemas:
     TOOLS.extend(_learned_schemas)
     print(f"[claude_tools] Loaded {len(_learned_schemas)} learned tool schema(s)")
+    for s in _learned_schemas:
+        print(f"  - {s['function']['name']}: {s['function'].get('description', '')[:60]}")
+else:
+    print("[claude_tools] No learned tools found")
+    
+# ---- Auto-load learned tools and add their schemas ----
+_learned_schemas = self_extension.load_learned_schemas()
+if _learned_schemas:
+    TOOLS.extend(_learned_schemas)
+    print(f"[claude_tools] Loaded {len(_learned_schemas)} learned tool schema(s)")
