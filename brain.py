@@ -1,24 +1,26 @@
 """LLM brain for JARVIS — uses Groq's free API with OpenAI-compatible client."""
 
+import json
 import os
 
 from openai import OpenAI
 
 from claude_tools import TOOLS
 
-# Groq endpoint — OpenAI-compatible
 client = OpenAI(
     base_url="https://api.groq.com/openai/v1",
     api_key=os.environ.get("GROQ_API_KEY"),
 )
 
-# Fast, free, supports tool calling
 MODEL = "openai/gpt-oss-120b"
 
 SYSTEM_PROMPT = (
     "You are JARVIS, a concise voice assistant. "
     "Keep replies to 1-2 sentences. "
     "Use the tools provided to answer questions. "
+    "For music playback, ALWAYS use play_on_youtube by default. "
+    "Only use play_on_spotify if the user explicitly says 'on spotify'. "
+    "If the user asks to stop music, use stop_youtube. "
     "If the user asks something that no tool handles, answer directly. "
     "Never make up data — use tools for facts."
 )
@@ -46,11 +48,11 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 5) -> str:
 
         msg = response.choices[0].message
 
-        # No tool calls — this is the final answer
+        # No tool calls — final answer
         if not msg.tool_calls:
             return msg.content or "I'm not sure how to help with that."
 
-        # Add the assistant's tool-call message
+        # Append assistant's tool-call request
         messages.append({
             "role": "assistant",
             "content": msg.content or "",
@@ -67,8 +69,7 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 5) -> str:
             ],
         })
 
-        # Execute each tool and add the results
-        import json
+        # Execute each tool
         for tc in msg.tool_calls:
             try:
                 args = json.loads(tc.function.arguments or "{}")

@@ -1,6 +1,55 @@
-"""Tool schemas for LLM tool-calling (OpenAI format, works with Groq)."""
+"""Tool schemas for LLM tool-calling (JARVIS)."""
 
 TOOLS = [
+    # ---------- Music ----------
+    {
+        "type": "function",
+        "function": {
+            "name": "play_on_youtube",
+            "description": (
+                "Play a song, artist, or any audio from YouTube. "
+                "This is the DEFAULT music player. Use this whenever the user "
+                "asks to play music unless they explicitly say 'on spotify'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Song name, artist, or search query",
+                    }
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "stop_youtube",
+            "description": "Stop current YouTube playback",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "play_on_spotify",
+            "description": (
+                "Play a song on Spotify. Use ONLY if the user explicitly "
+                "says 'on spotify' or 'using spotify'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Song or artist name"}
+                },
+                "required": ["query"],
+            },
+        },
+    },
+
+    # ---------- Info ----------
     {
         "type": "function",
         "function": {
@@ -30,8 +79,8 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "play_on_spotify",
-            "description": "Play a song or artist on Spotify",
+            "name": "search_wikipedia",
+            "description": "Look up a Wikipedia article on any topic or person",
             "parameters": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},
@@ -42,20 +91,8 @@ TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "open_app",
-            "description": "Open a Windows application (spotify, chrome, edge, notepad, calculator, explorer, cmd, vscode)",
-            "parameters": {
-                "type": "object",
-                "properties": {"app_name": {"type": "string"}},
-                "required": ["app_name"],
-            },
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "search_wikipedia",
-            "description": "Look up a Wikipedia article on any topic or person",
+            "name": "search_news",
+            "description": "Search recent news for a topic",
             "parameters": {
                 "type": "object",
                 "properties": {"query": {"type": "string"}},
@@ -107,18 +144,40 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+
+    # ---------- Launchers ----------
     {
         "type": "function",
         "function": {
-            "name": "search_news",
-            "description": "Search recent news for a topic",
+            "name": "open_app",
+            "description": (
+                "Open a Windows application. Supported: spotify, chrome, "
+                "edge, notepad, calculator, explorer, cmd, vscode"
+            ),
             "parameters": {
                 "type": "object",
-                "properties": {"query": {"type": "string"}},
-                "required": ["query"],
+                "properties": {"app_name": {"type": "string"}},
+                "required": ["app_name"],
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "open_website",
+            "description": (
+                "Open a website in the browser. Common shortcuts: youtube, "
+                "gmail, github, reddit, twitter, google, wikipedia"
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {"site": {"type": "string"}},
+                "required": ["site"],
+            },
+        },
+    },
+
+    # ---------- Productivity ----------
     {
         "type": "function",
         "function": {
@@ -152,7 +211,10 @@ TOOLS = [
                 "type": "object",
                 "properties": {
                     "text": {"type": "string"},
-                    "target_lang": {"type": "string", "description": "Language like Spanish, French, Hindi"},
+                    "target_lang": {
+                        "type": "string",
+                        "description": "Language like Spanish, French, Hindi, Japanese",
+                    },
                 },
                 "required": ["text", "target_lang"],
             },
@@ -165,7 +227,12 @@ TOOLS = [
             "description": "Convert between currencies using live rates",
             "parameters": {
                 "type": "object",
-                "properties": {"query": {"type": "string", "description": "Like '100 USD to INR'"}},
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Like '100 USD to INR'",
+                    }
+                },
                 "required": ["query"],
             },
         },
@@ -177,7 +244,12 @@ TOOLS = [
             "description": "Convert between units (length, weight, temperature)",
             "parameters": {
                 "type": "object",
-                "properties": {"query": {"type": "string", "description": "Like '10 km to miles'"}},
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Like '10 km to miles'",
+                    }
+                },
                 "required": ["query"],
             },
         },
@@ -190,13 +262,21 @@ TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "seconds": {"type": "integer", "description": "Seconds from now"},
-                    "message": {"type": "string", "description": "What to remind about"},
+                    "seconds": {
+                        "type": "integer",
+                        "description": "Seconds from now",
+                    },
+                    "message": {
+                        "type": "string",
+                        "description": "What to remind about",
+                    },
                 },
                 "required": ["seconds", "message"],
             },
         },
     },
+
+    # ---------- Utilities ----------
     {
         "type": "function",
         "function": {
@@ -219,18 +299,6 @@ TOOLS = [
             "name": "morning_briefing",
             "description": "Give a morning briefing: date, time, weather, battery",
             "parameters": {"type": "object", "properties": {}},
-        },
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "open_website",
-            "description": "Open a website in the browser (youtube, gmail, github, etc.)",
-            "parameters": {
-                "type": "object",
-                "properties": {"site": {"type": "string"}},
-                "required": ["site"],
-            },
         },
     },
     {
