@@ -21,7 +21,6 @@ EDGE_VOICE = "en-US-AndrewNeural"
 EDGE_RATE = "-5%"
 EDGE_PITCH = "+0Hz"
 
-# Serialize speak() calls — prevents overlapping playback
 _speak_lock = threading.Lock()
 
 print("Loading Whisper...")
@@ -38,7 +37,6 @@ def trim_silence(audio, threshold=0.01):
 
 
 def listen_voice() -> str:
-    # Wait a moment so JARVIS's own speaker output dies down
     time.sleep(0.5)
 
     print("[Listening... speak now]")
@@ -50,10 +48,13 @@ def listen_voice() -> str:
     if len(audio) < SAMPLE_RATE * 0.3:
         print("[Too short — nothing captured]")
         return ""
+
+    # Language auto-detected — supports Hindi, English, and Hinglish
     result = whisper_model.transcribe(
-    audio, fp16=False,
-    condition_on_previous_text=False,
-    no_speech_threshold=0.6,
+        audio,
+        fp16=False,
+        condition_on_previous_text=False,
+        no_speech_threshold=0.6,
     )
     text = result["text"].strip()
     print(f"You (voice): {text}")
@@ -80,15 +81,9 @@ def _mp3_to_wav(mp3_path: str, wav_path: str) -> bool:
 
 
 def speak(text: str, quiet: bool = False) -> None:
-    """Convert text to speech and play it.
-
-    quiet=True  → print only, no audio (used for 'Playing X' confirmations)
-    """
     print(f"JARVIS: {text}")
-
     if quiet:
         return
-
     with _speak_lock:
         mp3_path = None
         wav_path = None

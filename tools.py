@@ -9,10 +9,6 @@ import requests
 from datetime import datetime
 from pathlib import Path
 
-from voice import speak
-
-NOTES_FILE = Path("notes.txt")
-
 
 # ---------- Info tools ----------
 
@@ -183,6 +179,7 @@ def random_wikipedia() -> str:
 
 _spotify_client = None
 
+
 def get_spotify_client():
     global _spotify_client
     if _spotify_client is not None:
@@ -215,16 +212,26 @@ def play_on_spotify(query: str) -> str:
         print(f"[Spotify search: '{query}']")
         results = sp.search(q=query, limit=5, type="track", market="IN")
         items = results["tracks"]["items"]
+
         if items:
+            # Pick the most popular match — this is usually the original song
             items = sorted(items, key=lambda t: t.get("popularity", 0), reverse=True)
+
         if not items:
             return f"Couldn't find {query} on Spotify."
+
         track = items[0]
         uri = track["uri"]
         name = track["name"]
         artist = track["artists"][0]["name"]
-        import time
+
         devices = sp.devices().get("devices", [])
+
+        def is_browser(d):
+            n = d.get("name", "").lower()
+            return any(b in n for b in
+                       ["chrome", "edge", "firefox", "brave", "opera",
+                        "web player", "safari"])
 
         def usable(d):
             n = d.get("name", "").lower()
@@ -232,28 +239,21 @@ def play_on_spotify(query: str) -> str:
                 return False
             return True
 
-        chosen = next((d for d in devices if d.get("is_active") and usable(d)), None)
+        # Always target the browser web player
+        chosen = next((d for d in devices if is_browser(d) and usable(d)), None)
+
         if chosen is None:
-            chosen = next((d for d in devices if usable(d)), None)
-        if chosen is None:
-            print("[No usable device — launching Spotify desktop...]")
-            subprocess.Popen(os.path.expandvars(r"%APPDATA%\Spotify\Spotify.exe"))
-            for attempt in range(10):
-                time.sleep(2)
-                devices = sp.devices().get("devices", [])
-                chosen = next((d for d in devices if usable(d)), None)
-                if chosen:
-                    print(f"[Spotify ready after {(attempt + 1) * 2}s]")
-                    break
-            if chosen is None:
-                return "No playable Spotify device found. Open Spotify manually."
+            return ("Open open.spotify.com in Chrome first, play any song "
+                    "for 3 seconds, pause it, then try again.")
+
         device_id = chosen["id"]
         print(f"[Using device: {chosen.get('name', 'unknown')}]")
+
         try:
             sp.transfer_playback(device_id, force_play=False)
-            time.sleep(0.5)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[transfer warning: {e}]")
+
         sp.start_playback(device_id=device_id, uris=[uri])
         return f"Playing {name} by {artist}."
     except Exception as e:
@@ -297,11 +297,16 @@ def calculate(expression: str) -> str:
 
 _timers = []
 
+
 def set_timer(seconds: int, label: str = "timer") -> str:
     def _ring():
         import time
         time.sleep(seconds)
-        speak(f"Your {label} is up.")
+        try:
+            from voice import speak as _speak
+            _speak(f"Your {label} is up.")
+        except Exception:
+            print(f"Timer up: {label}")
     t = threading.Thread(target=_ring, daemon=True)
     t.start()
     _timers.append(t)
@@ -313,6 +318,7 @@ def set_timer(seconds: int, label: str = "timer") -> str:
 
 def take_note(text: str) -> str:
     try:
+        NOTES_FILE = Path("notes.txt")
         timestamp = datetime.now().strftime("%Y-%m-%d %H:%M")
         with NOTES_FILE.open("a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] {text}\n")
@@ -322,6 +328,7 @@ def take_note(text: str) -> str:
 
 
 def read_notes() -> str:
+    NOTES_FILE = Path("notes.txt")
     if not NOTES_FILE.exists() or NOTES_FILE.stat().st_size == 0:
         return "You don't have any notes yet."
     lines = NOTES_FILE.read_text(encoding="utf-8").strip().splitlines()
