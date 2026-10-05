@@ -1362,7 +1362,25 @@
   micBtn.addEventListener("click", triggerVoice);
 
   input.focus();
-
+    // ---- Poll for wake-word conversations every second ----
+    setInterval(async () => {
+      try {
+        const res = await fetch("/api/events");
+        const data = await res.json();
+        if (data.events && data.events.length > 0) {
+          for (const ev of data.events) {
+            addMessage("You", ev.user);
+            addMessage("JARVIS", ev.reply);
+            logActivity("&gt; " + ev.user.slice(0, 26), true);
+            bumpCount();
+          }
+          setState("speaking");
+          setTimeout(() => setState(""), 1800);
+        }
+      } catch (e) {
+        // server busy — ignore and retry next second
+      }
+    }, 1000);
   // ============ Boot sequence ============
   setTimeout(() => {
     document.getElementById("boot").classList.add("hide");
