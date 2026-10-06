@@ -206,6 +206,9 @@ def get_spotify_client():
 
 
 def play_on_spotify(query: str) -> str:
+    import browser_control
+    import time
+
     sp = get_spotify_client()
     if sp is None:
         return "Spotify isn't set up yet."
@@ -231,8 +234,6 @@ def play_on_spotify(query: str) -> str:
         name = track["name"]
         artist = track["artists"][0]["name"]
 
-        devices = sp.devices().get("devices", [])
-
         def is_browser(d):
             n = d.get("name", "").lower()
             return any(b in n for b in
@@ -245,16 +246,41 @@ def play_on_spotify(query: str) -> str:
                 return False
             return True
 
-        # Prefer web player, then active device
+        # Try to find an existing device
+        devices = sp.devices().get("devices", [])
         chosen = next((d for d in devices if is_browser(d) and usable(d)), None)
         if chosen is None:
             chosen = next((d for d in devices if d.get("is_active") and usable(d)), None)
         if chosen is None:
             chosen = next((d for d in devices if usable(d)), None)
 
+        # No device yet — open Spotify web player in the persistent JARVIS browser
         if chosen is None:
-            return ("Open open.spotify.com in Chrome first, play any song "
-                    "for 3 seconds, pause it, then try again.")
+            print("[No Spotify device — opening web player in JARVIS browser]")
+            try:
+                browser_control.open_url("https://open.spotify.com")
+            except Exception as e:
+                return f"Couldn't open Spotify browser: {e}"
+
+            # Wait for the web player to register as a device
+                        # Check immediately first (browser may already be open)
+            devices = sp.devices().get("devices", [])
+            chosen = next((d for d in devices if is_browser(d) and usable(d)), None)
+
+            # Only wait if we still have no device — cap at 10s
+            if chosen is None:
+                for attempt in range(10):
+                    time.sleep(1)
+                    devices = sp.devices().get("devices", [])
+                    chosen = next((d for d in devices if is_browser(d) and usable(d)), None)
+                    if chosen:
+                        print(f"[Web player registered after {attempt + 1}s]")
+                        break
+
+            if chosen is None:
+                return ("Spotify opened but the web player didn't register. "
+                        "Log in to Spotify in the JARVIS browser window, "
+                        "then try again.")
 
         device_id = chosen["id"]
         print(f"[Using device: {chosen.get('name', 'unknown')}]")

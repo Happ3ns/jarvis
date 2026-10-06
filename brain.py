@@ -28,7 +28,7 @@ _ollama_client = OpenAI(
 MODELS = [
     (_groq_client, "openai/gpt-oss-120b"),
     (_groq_client, "openai/gpt-oss-20b"),
-    (_groq_client, "qwen/qwen3.8-27b"),    
+    (_groq_client, "qwen/qwen3.8-27b"),
     (_ollama_client, "llama3.2:1b"),
 ]
 
@@ -49,6 +49,17 @@ SYSTEM_PROMPT = (
     "You are JARVIS, an autonomous agent that accomplishes complex goals "
     "by chaining tools together. "
 
+    "When the user asks about universities, admissions, SAT scores, "
+    "or academic programs, search the web and share what you find. "
+    "It's fine to give the user the information and let them draw "
+    "their own conclusions. Don't refuse — the user wants information, "
+    "not a formal guarantee. "
+
+
+    "When the user says 'play X on spotify' or 'spotify X', ALWAYS use "
+    "play_on_spotify. NEVER use open_app for Spotify. open_app is only "
+    "for opening the app when the user just says 'open spotify'. "
+
     # ---- Tool name rules (fix for Groq channel suffixes) ----
     "CRITICAL: You may ONLY call tools that appear in the tools list. "
     "Do NOT invent tool names. Do NOT append suffixes like '.channel' or "
@@ -66,11 +77,15 @@ SYSTEM_PROMPT = (
     "For merging CSVs in a folder: use 'merge_csv_folder' if available. "
     "For general math or data computation: use compute or run_code. "
 
-    # ---- Planning ----
-    "For any task requiring more than 2 tool calls, START your response "
-    "with 'PLAN:' followed by a short numbered list (max 6 items, one line "
-    "each). Then execute each step using tools, one after the other. "
-    "Finally, give a 1-2 sentence summary of the result. "
+        # ---- Planning ----
+    "For genuinely multi-step tasks (3+ tool calls), you may start "
+    "with a short 'PLAN:' block — max 3 short lines, each ending with "
+    "a newline. Follow with a blank line. Do NOT write 'PLAN' before "
+    "simple single-tool responses. NEVER write tool call JSON as plain "
+    "text — either use the structured tool_calls mechanism, or just "
+    "answer directly. "
+    "After the plan, execute each step using tools, one after the "
+    "other. Finally, give a 1-2 sentence summary of the result. "
     "For simple questions, answer directly without a plan. "
     "You have up to 25 tool calls per request. "
     "If a tool fails, adapt and try a different approach. "
@@ -328,9 +343,30 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
         try:
             stream = _call_with_fallback(messages, stream=True)
         except Exception as e:
-            anticipate.log_query(user_text, _used_tools)
-            yield ("content", f"All models failed: {e}")
-            return
+            err = str(e).lower()
+            if "not in request.tools" in err or "tool call validation" in err:
+                print(f"[brain] Groq channel-suffix rejection — retrying")
+                messages.append({
+                    "role": "system",
+                    "content": (
+                        "CRITICAL: Your last response tried to call a tool "
+                        "with an invalid name. It contained extra tokens like "
+                        "'<|channel|>commentary'. Use ONLY the exact tool "
+                        "names from the tools list. Example: 'open_app', not "
+                        "'open_app<|channel|>commentary'. Retry now with a "
+                        "clean tool name."
+                    ),
+                })
+                try:
+                    stream = _call_with_fallback(messages, stream=True)
+                except Exception as e2:
+                    anticipate.log_query(user_text, _used_tools)
+                    yield ("content", f"Retry failed: {e2}")
+                    return
+            else:
+                anticipate.log_query(user_text, _used_tools)
+                yield ("content", f"All models failed: {e}")
+                return
 
         content_buffer = ""
         tool_calls_buffer = {}
@@ -359,12 +395,79 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         continue
 
                 if plan_state == "in_plan":
-                    yield ("plan", delta.content)
+                    # Exit plan when we see a line that isn't a numbered item
                     after = content_buffer.split("PLAN:", 1)[-1]
                     after = after.split("Plan:", 1)[-1]
                     after = after.split("plan:", 1)[-1]
-                    if "\n\n" in after:
+                    lines = after.split("\n")
+                    
+                    exit_plan = False
+                    for i, line in enumerate(lines):
+                        s = line.strip()
+                        if not s:
+                            continue
+                        # Numbered/bulleted = still in plan
+                        if s[0].isdigit() or s[0] in "-*•":
+                            continue
+                        # Non-list line = plan is over
+                        if i > 0:  # at least one plan line already
+                            exit_plan = True
+                            break
+                    if exit_plan:
                         plan_state = "after_plan"
+                        # Yield current chunk as content (plan already sent)
+                        yield ("content", delta.content)
+                    else:
+                        yield ("plan", delta.content)
+                    continue
+                                # Detect raw JSON tool calls leaked as text
+                # Qwen sometimes writes {"name": "...", "parameters": {...}}
+                # instead of using structured tool calls
+                if plan_state == "after_plan" and "{" in delta.content:
+                    import re as _re
+                    # Look for JSON-like object with a name field
+                    m = _re.search(
+                        r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"'
+                        r'(parameters|arguments)"\s*:\s*(\{.*?\})\s*\}',
+                        content_buffer,
+                        _re.DOTALL,
+                    )
+                    if m:
+                        tool_name = m.group(1)
+                        tool_args_json = m.group(3)
+                        try:
+                            tool_args = json.loads(tool_args_json)
+                        except json.JSONDecodeError:
+                            tool_args = {}
+                        print(f"[brain] detected raw JSON tool call: {tool_name}")
+                        yield ("status", f"[Calling {tool_name}...]")
+                        try:
+                            result = execute_tool_fn(tool_name, tool_args)
+                            _used_tools.append({"name": tool_name, "args": tool_args})
+                        except Exception as e:
+                            result = f"Tool error: {e}"
+
+                                    # Tools whose result is already user-ready. Skip the second LLM call.
+                    SELF_REPLYING_TOOLS = {
+                    "play_on_spotify", "play_on_youtube", "stop_youtube",
+                    "stop_music", "stop_all_music",
+                    "open_app", "close_app",
+                    "take_note", "set_reminder", "set_timer",
+                    "shutdown", "restart", "sleep_system",
+                    }
+                    if tc["name"] in SELF_REPLYING_TOOLS:
+                       yield ("content", str(result))
+                       anticipate.log_query(user_text, _used_tools)
+                       yield ("done", "")
+                       return
+                        # Strip the JSON from content and inject the real result
+                    content_buffer = content_buffer[:m.start()]
+                    textSpan_content = (
+                            content_buffer + "\n\n" + str(result)
+                        )
+                    yield ("content", "\n\n" + str(result))
+                        # Reset buffer so we don't re-detect
+                    content_buffer = textSpan_content
                     continue
 
                 yield ("content", delta.content)

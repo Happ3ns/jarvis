@@ -17,18 +17,40 @@ _page = None
 
 
 def _ensure_browser():
-    """Start the browser on first use."""
     global _playwright, _browser, _page
     if _page is not None:
         try:
-            # Check it's still alive
             _ = _page.url
             return _page
         except Exception:
             _page = None
+
     _playwright = sync_playwright().start()
-    _browser = _playwright.chromium.launch(headless=False)
-    _page = _browser.new_page()
+
+    _context = _playwright.chromium.launch_persistent_context(
+        user_data_dir=str(PROFILE_DIR),
+        headless=False,
+        channel="chrome",
+        args=[
+            "--disable-blink-features=AutomationControlled",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-infobars",
+            "--autoplay-policy=no-user-gesture-required",
+        ],
+        viewport={"width": 1280, "height": 800},
+        ignore_default_args=["--enable-automation"],
+    )
+
+    _context.add_init_script("""
+        Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+        Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+        Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+        window.chrome = { runtime: {} };
+    """)
+
+    _browser = _context
+    _page = _context.pages[0] if _context.pages else _context.new_page()
     return _page
 
 
@@ -49,14 +71,12 @@ def close_browser() -> str:
 
 
 def open_url(url: str) -> str:
-    """Open a URL and report the page title."""
     if not url.startswith(("http://", "https://")):
         url = "https://" + url
     page = _ensure_browser()
     try:
-        page.goto(url, timeout=20000, wait_until="domcontentloaded")
-        title = page.title()
-        return f"Opened '{title}' at {url}."
+        page.goto(url, timeout=8000, wait_until="commit")
+        return f"Opened {url}."
     except PWTimeout:
         return f"Timed out loading {url}."
     except Exception as e:

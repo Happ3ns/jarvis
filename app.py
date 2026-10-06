@@ -252,9 +252,39 @@ def voice():
 if __name__ == "__main__":
     speak("JARVIS online. Type in the browser.")
     ambient.start()
+
     import daemon
     daemon.start()
+
     anticipate.start(execute_tool)
+
+    # ---- Warm up the browser in the background ----
+    import threading
+    import time as _time
+
+    def warmup_browser():
+        """Pre-open the browser + Spotify so first music command is instant."""
+        _time.sleep(3)  # let Flask bind first
+        t0 = _time.time()
+        print("[warmup] launching browser...")
+        try:
+            import browser_control
+            browser_control._ensure_browser()
+            print(f"[warmup] browser ready in {_time.time() - t0:.1f}s")
+        except Exception as e:
+            print(f"[warmup] browser launch failed: {e}")
+            return
+
+        t1 = _time.time()
+        print("[warmup] navigating to Spotify...")
+        try:
+            browser_control.open_url("https://open.spotify.com")
+            print(f"[warmup] Spotify ready in {_time.time() - t1:.1f}s")
+        except Exception as e:
+            print(f"[warmup] navigation failed: {e}")
+
+    threading.Thread(target=warmup_browser, daemon=True).start()
+
     try:
         app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
     finally:
