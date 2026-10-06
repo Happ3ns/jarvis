@@ -113,10 +113,10 @@ def _get_recent_files(minutes: int = 60) -> list:
 def _extract_app_name(title: str) -> str:
     if not title:
         return "Unknown"
-    # Common patterns: "file.py - VS Code", "Page - Chrome"
+    # Take the last segment after " - " (usually the app name)
     if " - " in title:
         return title.split(" - ")[-1].strip()
-    return title[:40]
+    return title[:60]
 
 
 # ---------- App time tracking ----------

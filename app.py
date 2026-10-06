@@ -55,6 +55,115 @@ def command():
         "speak": not quiet, "exit": False,
     })
 
+@app.route("/api/notifications", methods=["GET"])
+def get_notifications():
+    """Return and clear queued notifications."""
+    import notifications
+    return jsonify({"notifications": notifications.drain()})
+
+@app.route("/api/tasks", methods=["GET"])
+def get_tasks():
+    import tasks
+    import sqlite3
+    with sqlite3.connect(tasks.DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, name, type, schedule, enabled, "
+            "next_run_at, run_count FROM tasks "
+            "WHERE enabled = 1 ORDER BY next_run_at ASC"
+        ).fetchall()
+    return jsonify({"tasks": [dict(r) for r in rows]})
+
+@app.route("/api/system", methods=["GET"])
+def get_system():
+    try:
+        import psutil
+        cpu = psutil.cpu_percent(interval=0.1)
+        mem = psutil.virtual_memory().percent
+        disk = psutil.disk_usage("C:\\").percent if __import__("os").name == "nt" else psutil.disk_usage("/").percent
+        net = psutil.net_io_counters()
+        return jsonify({
+            "cpu": round(cpu),
+            "mem": round(mem),
+            "disk": round(disk),
+            "net_sent_mb": round(net.bytes_sent / 1024 / 1024, 1),
+            "net_recv_mb": round(net.bytes_recv / 1024 / 1024, 1),
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
+@app.route("/api/memory-stats", methods=["GET"])
+def memory_stats_endpoint():
+    import sqlite3
+    from pathlib import Path
+    result = {"facts": 0, "conversations": 0}
+    db = Path("memory.db")
+    if db.exists():
+        try:
+            with sqlite3.connect(db) as conn:
+                result["facts"] = conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
+                result["conversations"] = conn.execute("SELECT COUNT(*) FROM conversations").fetchone()[0]
+        except Exception:
+            pass
+    return jsonify(result)
+
+
+@app.route("/api/tool-stats", methods=["GET"])
+def tool_stats_endpoint():
+    import json
+    from pathlib import Path
+    stats_file = Path("tool_stats.json")
+    if not stats_file.exists():
+        return jsonify({"tools": []})
+    try:
+        stats = json.loads(stats_file.read_text(encoding="utf-8"))
+        tools = []
+        for name, s in stats.items():
+            if s.get("calls", 0) < 1:
+                continue
+            rate = s["successes"] / s["calls"] * 100 if s["calls"] else 0
+            tools.append({
+                "name": name,
+                "calls": s["calls"],
+                "rate": round(rate),
+                "avg": round(s.get("total_time", 0) / s["calls"], 2) if s["calls"] else 0,
+            })
+        tools.sort(key=lambda x: -x["calls"])
+        return jsonify({"tools": tools[:5]})
+    except Exception:
+        return jsonify({"tools": []})
+
+
+@app.route("/api/recent-files", methods=["GET"])
+def recent_files_endpoint():
+    import json
+    from pathlib import Path
+    state_file = Path("ambient_state.json")
+    if not state_file.exists():
+        return jsonify({"files": []})
+    try:
+        data = json.loads(state_file.read_text(encoding="utf-8"))
+        return jsonify({"files": data.get("recent_files", [])[:6]})
+    except Exception:
+        return jsonify({"files": []})
+
+@app.route("/api/ambient", methods=["GET"])
+def get_ambient():
+    import json
+    from pathlib import Path
+    state_file = Path("ambient_state.json")
+    if not state_file.exists():
+        return jsonify({"active_app": None, "active_window": None, "idle": 0})
+    try:
+        data = json.loads(state_file.read_text(encoding="utf-8"))
+        return jsonify({
+            "active_app": data.get("active_app"),
+            "active_window": data.get("active_window"),
+            "idle": data.get("idle_seconds", 0),
+        })
+    except Exception:
+        return jsonify({"active_app": None, "active_window": None, "idle": 0})
 
 @app.route("/api/command/stream", methods=["POST"])
 def command_stream():
@@ -139,4 +248,9 @@ def voice():
 if __name__ == "__main__":
     speak("JARVIS online. Type in the browser.")
     ambient.start()
-    app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
+    import daemon
+    daemon.start()
+    try:
+        app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
+    finally:
+        daemon.stop()

@@ -7,43 +7,49 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <style>
   :root {
-    --bg-0: #02060b;
+    --bg-0: #01040a;
+    --bg-1: #030812;
+    --glass: rgba(6, 16, 26, 0.55);
+    --glass-hi: rgba(10, 25, 40, 0.75);
     --cyan: #00e5ff;
     --cyan-dim: #0088a8;
     --cyan-faint: rgba(0, 229, 255, 0.15);
     --cyan-glow: rgba(0, 229, 255, 0.55);
+    --purple: #9d4edd;
+    --purple-glow: rgba(157, 78, 221, 0.5);
     --gold: #ffb347;
     --gold-glow: rgba(255, 179, 71, 0.5);
-    --green: #33ff99;
+    --green: #00ff9d;
     --yellow: #ffd700;
     --pink: #ff2b8f;
     --red: #ff3355;
-    --fg: #b8e8f5;
+    --fg: #c8f2ff;
     --muted: #4d7a8f;
-    --dim: #1a3d4d;
-    --line: rgba(0, 229, 255, 0.25);
-    --line-dim: rgba(0, 229, 255, 0.1);
+    --subtle: #2a4a5c;
+    --line: rgba(0, 229, 255, 0.15);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html, body {
     height: 100%;
     background: var(--bg-0);
     color: var(--fg);
-    font-family: "JetBrains Mono", "SF Mono", Consolas, monospace;
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     overflow: hidden;
     font-size: 12px;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
     user-select: none;
   }
+  .mono { font-family: "JetBrains Mono", "SF Mono", Consolas, monospace; }
 
   /* ============ BACKGROUND ============ */
   .stage {
     position: fixed;
     inset: 0;
     background:
-      radial-gradient(ellipse at 50% 45%, rgba(0, 150, 200, 0.20) 0%, transparent 45%),
-      radial-gradient(ellipse at 50% 45%, rgba(0, 229, 255, 0.08) 0%, transparent 65%),
-      linear-gradient(180deg, #02060b 0%, #04101c 50%, #02060b 100%);
+      radial-gradient(ellipse 800px 600px at 50% 45%, rgba(0, 200, 255, 0.14) 0%, transparent 60%),
+      radial-gradient(ellipse 1200px 900px at 15% 85%, rgba(157, 78, 221, 0.08) 0%, transparent 55%),
+      radial-gradient(ellipse 1000px 800px at 85% 15%, rgba(0, 229, 255, 0.06) 0%, transparent 50%),
+      linear-gradient(180deg, #01040a 0%, #030812 50%, #01040a 100%);
     z-index: 0;
   }
   .stage::before {
@@ -51,915 +57,1040 @@
     position: absolute;
     inset: 0;
     background-image:
-      linear-gradient(rgba(0, 229, 255, 0.035) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0, 229, 255, 0.035) 1px, transparent 1px);
-    background-size: 36px 36px;
-    mask-image: radial-gradient(ellipse at 50% 45%, black 15%, transparent 75%);
-    -webkit-mask-image: radial-gradient(ellipse at 50% 45%, black 15%, transparent 75%);
+      linear-gradient(rgba(0, 229, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 229, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(rgba(0, 229, 255, 0.015) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0, 229, 255, 0.015) 1px, transparent 1px);
+    background-size: 120px 120px, 120px 120px, 20px 20px, 20px 20px;
+    mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 85%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, black 30%, transparent 85%);
   }
-  .stage::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent 0px,
-      transparent 3px,
-      rgba(0, 229, 255, 0.025) 3px,
-      rgba(0, 229, 255, 0.025) 4px
-    );
-    pointer-events: none;
+  .particles { position: fixed; inset: 0; z-index: 1; pointer-events: none; overflow: hidden; }
+  .particle {
+    position: absolute; width: 2px; height: 2px;
+    background: var(--cyan); border-radius: 50%;
+    box-shadow: 0 0 6px var(--cyan);
+    opacity: 0; animation: floatParticle 12s linear infinite;
   }
-
-  /* Sweeping scan line */
-  .scan {
-    position: fixed;
-    left: 0;
-    right: 0;
-    height: 180px;
+  @keyframes floatParticle {
+    0% { opacity: 0; transform: translateY(100vh) scale(0.5); }
+    10% { opacity: 0.8; }
+    90% { opacity: 0.8; }
+    100% { opacity: 0; transform: translateY(-10vh) scale(1); }
+  }
+  .scan-h {
+    position: fixed; left: 0; right: 0; height: 200px;
     background: linear-gradient(180deg,
-      transparent 0%,
-      rgba(0, 229, 255, 0.05) 40%,
+      transparent 0%, rgba(0, 229, 255, 0.04) 40%,
       rgba(0, 229, 255, 0.12) 50%,
-      rgba(0, 229, 255, 0.05) 60%,
-      transparent 100%);
-    animation: scan 8s linear infinite;
-    pointer-events: none;
-    z-index: 1;
+      rgba(0, 229, 255, 0.04) 60%, transparent 100%);
+    animation: scanH 9s linear infinite;
+    pointer-events: none; z-index: 1;
   }
-  @keyframes scan {
-    0% { top: -180px; }
-    100% { top: 100vh; }
-  }
+  @keyframes scanH { 0% { top: -200px; } 100% { top: 100vh; } }
 
-  /* ============ HUD FRAME ============ */
+  /* ============ FRAME ============ */
   .frame {
-    position: relative;
-    z-index: 2;
-    height: 100vh;
-    padding: 12px;
+    position: relative; z-index: 2;
+    height: 100vh; padding: 14px;
     display: grid;
-    grid-template-rows: 42px 1fr 32px;
-    gap: 0;
+    grid-template-rows: 48px 1fr 34px;
+    gap: 12px;
   }
 
-  /* Corner brackets */
   .bracket {
-    position: fixed;
-    width: 44px;
-    height: 44px;
-    border: 2px solid var(--cyan);
-    pointer-events: none;
-    z-index: 10;
-    box-shadow: 0 0 12px var(--cyan-glow), inset 0 0 8px var(--cyan-faint);
+    position: fixed; width: 54px; height: 54px;
+    pointer-events: none; z-index: 10;
   }
-  .bracket.tl { top: 6px; left: 6px; border-right: none; border-bottom: none; }
-  .bracket.tr { top: 6px; right: 6px; border-left: none; border-bottom: none; }
-  .bracket.bl { bottom: 6px; left: 6px; border-right: none; border-top: none; }
-  .bracket.br { bottom: 6px; right: 6px; border-left: none; border-top: none; }
+  .bracket::before, .bracket::after {
+    content: ""; position: absolute;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan-glow);
+  }
+  .bracket::before { width: 100%; height: 2px; }
+  .bracket::after { width: 2px; height: 100%; }
+  .bracket.tl { top: 6px; left: 6px; }
+  .bracket.tl::before { top: 0; left: 0; }
+  .bracket.tl::after { top: 0; left: 0; }
+  .bracket.tr { top: 6px; right: 6px; }
+  .bracket.tr::before { top: 0; right: 0; }
+  .bracket.tr::after { top: 0; right: 0; }
+  .bracket.bl { bottom: 6px; left: 6px; }
+  .bracket.bl::before { bottom: 0; left: 0; }
+  .bracket.bl::after { bottom: 0; left: 0; }
+  .bracket.br { bottom: 6px; right: 6px; }
+  .bracket.br::before { bottom: 0; right: 0; }
+  .bracket.br::after { bottom: 0; right: 0; }
+
+  .tick-corner {
+    position: fixed; width: 90px; height: 90px;
+    pointer-events: none; z-index: 9; opacity: 0.35;
+  }
+  .tick-corner::before, .tick-corner::after {
+    content: ""; position: absolute;
+    background: var(--gold);
+    box-shadow: 0 0 4px var(--gold-glow);
+  }
+  .tick-corner::before { width: 1px; height: 20px; }
+  .tick-corner::after { width: 20px; height: 1px; }
+  .tick-corner.tl { top: 24px; left: 24px; }
+  .tick-corner.tr { top: 24px; right: 24px; }
+  .tick-corner.bl { bottom: 24px; left: 24px; }
+  .tick-corner.br { bottom: 24px; right: 24px; }
 
   /* ============ TOPBAR ============ */
   .topbar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 6px;
-    position: relative;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 16px; position: relative;
+    background: var(--glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
   }
   .topbar::after {
-    content: "";
-    position: absolute;
-    left: 0; right: 0; bottom: 0;
-    height: 1px;
-    background: linear-gradient(90deg,
-      transparent 0%,
-      var(--cyan-dim) 15%,
-      var(--cyan) 50%,
-      var(--cyan-dim) 85%,
-      transparent 100%);
-    box-shadow: 0 0 8px var(--cyan-glow);
+    content: ""; position: absolute;
+    left: 0; right: 0; bottom: 0; height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--cyan) 50%, transparent 100%);
+    box-shadow: 0 0 12px var(--cyan-glow);
+    animation: topbarPulse 3s ease-in-out infinite;
   }
+  @keyframes topbarPulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
 
   .logo-block { display: flex; align-items: center; gap: 14px; }
   .logo-mark {
-    width: 28px; height: 28px;
-    border: 1.5px solid var(--cyan);
+    width: 32px; height: 32px;
     position: relative;
     display: flex; align-items: center; justify-content: center;
-    box-shadow: 0 0 10px var(--cyan-glow), inset 0 0 6px var(--cyan-faint);
   }
   .logo-mark::before {
-    content: "";
-    width: 6px; height: 6px;
-    background: var(--cyan);
-    box-shadow: 0 0 10px var(--cyan);
-    border-radius: 50%;
-    animation: reactorPulse 2s ease-in-out infinite;
+    content: ""; position: absolute; inset: 0;
+    border: 1.5px solid var(--cyan); border-radius: 50%;
+    box-shadow: 0 0 12px var(--cyan-glow), inset 0 0 8px var(--cyan-faint);
+    animation: logoRotate 8s linear infinite;
+    border-top-color: transparent;
+    border-right-color: transparent;
   }
   .logo-mark::after {
     content: "";
-    position: absolute;
-    inset: 4px;
-    border: 1px solid var(--cyan-faint);
+    width: 8px; height: 8px;
+    background: var(--cyan);
+    box-shadow: 0 0 12px var(--cyan), 0 0 24px var(--cyan-glow);
     border-radius: 50%;
+    animation: reactorPulse 2s ease-in-out infinite;
   }
+  @keyframes logoRotate { to { transform: rotate(360deg); } }
 
   .logo-text { line-height: 1.1; }
   .logo-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: var(--cyan);
-    letter-spacing: 0.55em;
-    text-shadow: 0 0 10px var(--cyan-glow);
+    font-size: 17px; font-weight: 700;
+    color: var(--cyan); letter-spacing: 0.55em;
+    text-shadow: 0 0 12px var(--cyan-glow);
+    font-family: "JetBrains Mono", monospace;
   }
   .logo-sub {
-    font-size: 8.5px;
-    color: var(--muted);
-    letter-spacing: 0.35em;
-    text-transform: uppercase;
+    font-size: 8.5px; color: var(--muted);
+    letter-spacing: 0.4em; text-transform: uppercase;
     margin-top: 2px;
+    font-family: "JetBrains Mono", monospace;
   }
-
   .topcenter {
-    display: flex;
-    align-items: center;
-    gap: 24px;
-    font-size: 9.5px;
-    letter-spacing: 0.25em;
-    color: var(--muted);
-    text-transform: uppercase;
+    display: flex; align-items: center; gap: 20px;
+    font-size: 9.5px; letter-spacing: 0.28em;
+    color: var(--muted); text-transform: uppercase;
+    font-family: "JetBrains Mono", monospace;
   }
-  .topcenter .sep {
-    width: 30px; height: 1px;
-    background: var(--cyan-dim);
-    box-shadow: 0 0 4px var(--cyan-glow);
-  }
+  .topcenter .sep { width: 24px; height: 1px; background: var(--cyan-dim); }
+  .topcenter .hi { color: var(--cyan); text-shadow: 0 0 6px var(--cyan-glow); }
 
   .status-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 10px;
-    padding: 6px 14px;
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 8px 16px;
     border: 1px solid var(--cyan-dim);
-    background: rgba(0, 229, 255, 0.04);
-    box-shadow: inset 0 0 12px rgba(0, 229, 255, 0.08);
-    font-size: 10px;
-    letter-spacing: 0.3em;
-    text-transform: uppercase;
-    color: var(--cyan);
-    clip-path: polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px);
+    background: rgba(0, 229, 255, 0.05);
+    box-shadow: inset 0 0 16px rgba(0, 229, 255, 0.1);
+    font-size: 10px; letter-spacing: 0.35em;
+    text-transform: uppercase; color: var(--cyan);
+    font-family: "JetBrains Mono", monospace;
+    clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
     transition: all 0.35s ease;
   }
   .status-dot {
     width: 7px; height: 7px; border-radius: 50%;
     background: var(--cyan);
-    box-shadow: 0 0 10px var(--cyan);
+    box-shadow: 0 0 10px var(--cyan), 0 0 20px var(--cyan-glow);
     animation: reactorPulse 2s ease-in-out infinite;
   }
-  .status-pill.listening { color: var(--green); border-color: var(--green); box-shadow: inset 0 0 12px rgba(51,255,153,0.1), 0 0 20px rgba(51,255,153,0.3); }
-  .status-pill.listening .status-dot { background: var(--green); box-shadow: 0 0 12px var(--green); }
-  .status-pill.thinking { color: var(--yellow); border-color: var(--yellow); box-shadow: inset 0 0 12px rgba(255,215,0,0.1), 0 0 20px rgba(255,215,0,0.3); }
-  .status-pill.thinking .status-dot { background: var(--yellow); box-shadow: 0 0 12px var(--yellow); }
-  .status-pill.speaking { color: var(--pink); border-color: var(--pink); box-shadow: inset 0 0 12px rgba(255,43,143,0.1), 0 0 20px rgba(255,43,143,0.3); }
-  .status-pill.speaking .status-dot { background: var(--pink); box-shadow: 0 0 12px var(--pink); }
+  .status-pill.listening { color: var(--green); border-color: var(--green); box-shadow: inset 0 0 16px rgba(0,255,157,0.1), 0 0 24px rgba(0,255,157,0.4); }
+  .status-pill.listening .status-dot { background: var(--green); box-shadow: 0 0 12px var(--green), 0 0 24px var(--green); }
+  .status-pill.thinking { color: var(--yellow); border-color: var(--yellow); box-shadow: inset 0 0 16px rgba(255,215,0,0.1), 0 0 24px rgba(255,215,0,0.4); }
+  .status-pill.thinking .status-dot { background: var(--yellow); box-shadow: 0 0 12px var(--yellow), 0 0 24px var(--yellow); }
+  .status-pill.speaking { color: var(--pink); border-color: var(--pink); box-shadow: inset 0 0 16px rgba(255,43,143,0.1), 0 0 24px rgba(255,43,143,0.4); }
+  .status-pill.speaking .status-dot { background: var(--pink); box-shadow: 0 0 12px var(--pink), 0 0 24px var(--pink); }
   .status-pill.error { color: var(--red); border-color: var(--red); }
   .status-pill.error .status-dot { background: var(--red); box-shadow: 0 0 12px var(--red); }
-
   @keyframes reactorPulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.5; transform: scale(0.85); }
   }
 
-  /* ============ MAIN GRID ============ */
+  /* ============ MAIN ============ */
   .main {
     display: grid;
-    grid-template-columns: 260px 1fr 260px;
-    gap: 0;
-    position: relative;
+    grid-template-columns: 300px 1fr 320px;
+    gap: 12px;
     min-height: 0;
     overflow: hidden;
   }
 
-  /* Vertical divider lines */
-  .main::before, .main::after {
-    content: "";
-    position: absolute;
-    top: 20px; bottom: 20px;
-    width: 1px;
-    background: linear-gradient(180deg,
-      transparent 0%,
-      var(--cyan-dim) 20%,
-      var(--cyan) 50%,
-      var(--cyan-dim) 80%,
-      transparent 100%);
-    opacity: 0.4;
-    pointer-events: none;
+  .glass-panel {
+    background: var(--glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    position: relative;
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
   }
-  .main::before { left: 260px; }
-  .main::after  { right: 260px; }
+  .glass-panel::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--cyan) 30%, var(--cyan) 70%, transparent 100%);
+    opacity: 0.6;
+  }
+  .panel-corner {
+    position: absolute; width: 20px; height: 20px;
+    pointer-events: none; opacity: 0.5;
+  }
+  .panel-corner::before, .panel-corner::after {
+    content: ""; position: absolute;
+    background: var(--cyan);
+  }
+  .panel-corner::before { width: 100%; height: 1px; }
+  .panel-corner::after { width: 1px; height: 100%; }
+  .panel-corner.tl { top: 8px; left: 8px; }
+  .panel-corner.tl::before { top: 0; left: 0; }
+  .panel-corner.tl::after { top: 0; left: 0; }
+  .panel-corner.br { bottom: 8px; right: 8px; }
+  .panel-corner.br::before { bottom: 0; right: 0; }
+  .panel-corner.br::after { bottom: 0; right: 0; }
 
-  /* ============ SIDE PANELS ============ */
-  .panel {
-    padding: 16px 18px;
-    display: flex;
-    flex-direction: column;
+  .panel-inner {
+    padding: 18px 20px;
+    display: flex; flex-direction: column;
     gap: 18px;
-    overflow-y: auto;
+    overflow-y: auto; flex: 1;
     scrollbar-width: none;
   }
-  .panel::-webkit-scrollbar { display: none; }
+  .panel-inner::-webkit-scrollbar { display: none; }
 
-  .panel-block {
-    position: relative;
-    padding-top: 4px;
+  .section-title {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 9px; letter-spacing: 0.4em;
+    color: var(--cyan); text-transform: uppercase;
+    margin-bottom: 6px;
+    font-family: "JetBrains Mono", monospace;
+    text-shadow: 0 0 10px var(--cyan-glow);
+    font-weight: 600;
   }
-  .panel-title {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-size: 9px;
-    letter-spacing: 0.35em;
-    color: var(--cyan);
-    text-transform: uppercase;
-    margin-bottom: 12px;
-    text-shadow: 0 0 8px var(--cyan-glow);
-  }
-  .panel-title::before {
-    content: "";
-    width: 4px; height: 4px;
+  .section-title::before {
+    content: ""; width: 6px; height: 6px;
     background: var(--cyan);
-    box-shadow: 0 0 6px var(--cyan);
+    box-shadow: 0 0 8px var(--cyan), 0 0 16px var(--cyan-glow);
     transform: rotate(45deg);
   }
-  .panel-title::after {
-    content: "";
-    flex: 1;
-    height: 1px;
+  .section-title::after {
+    content: ""; flex: 1; height: 1px;
     background: linear-gradient(90deg, var(--cyan-dim) 0%, transparent 100%);
   }
 
   .row {
-    display: flex;
-    justify-content: space-between;
+    display: flex; justify-content: space-between;
     align-items: baseline;
-    padding: 5px 0;
-    font-size: 10.5px;
-    letter-spacing: 0.1em;
+    padding: 5px 0; font-size: 11px;
+    letter-spacing: 0.05em;
+    font-family: "JetBrains Mono", monospace;
   }
-  .row .k { color: var(--muted); text-transform: uppercase; font-size: 9px; letter-spacing: 0.2em; }
+  .row .k {
+    color: var(--muted);
+    text-transform: uppercase;
+    font-size: 9.5px; letter-spacing: 0.22em;
+  }
   .row .v { color: var(--fg); font-weight: 500; }
-  .row .v.ok { color: var(--green); text-shadow: 0 0 6px rgba(51,255,153,0.5); }
+  .row .v.ok { color: var(--green); text-shadow: 0 0 8px rgba(0,255,157,0.5); }
+  .row .v.cyan { color: var(--cyan); text-shadow: 0 0 8px var(--cyan-glow); }
+  .row .v.gold { color: var(--gold); }
 
-  /* Radial meter */
+  /* Ring meter */
   .ring-meter {
     position: relative;
-    width: 110px;
-    height: 110px;
-    margin: 8px auto;
+    width: 130px; height: 130px;
+    margin: 4px auto 8px;
   }
-  .ring-meter svg { transform: rotate(-90deg); }
+  .ring-meter svg { transform: rotate(-90deg); width: 100%; height: 100%; }
   .ring-meter .label {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: 9px;
-    color: var(--muted);
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 9px; color: var(--muted);
+    letter-spacing: 0.25em; text-transform: uppercase;
+    font-family: "JetBrains Mono", monospace;
   }
   .ring-meter .label b {
-    font-size: 20px;
-    color: var(--cyan);
-    letter-spacing: 0.05em;
-    text-shadow: 0 0 12px var(--cyan-glow);
-    font-weight: 500;
-    margin-bottom: 2px;
+    font-size: 26px; color: var(--cyan);
+    letter-spacing: 0.02em;
+    text-shadow: 0 0 16px var(--cyan-glow), 0 0 32px rgba(0, 229, 255, 0.4);
+    font-weight: 600; margin-bottom: 2px;
+    font-family: "JetBrains Mono", monospace;
   }
 
+  /* Bars */
   .bar {
-    height: 3px;
-    background: rgba(0, 229, 255, 0.08);
-    position: relative;
-    overflow: hidden;
-    margin-top: 4px;
-    margin-bottom: 10px;
+    height: 4px;
+    background: rgba(0, 229, 255, 0.06);
+    position: relative; overflow: hidden;
+    margin-top: 5px; margin-bottom: 10px;
+    border-radius: 2px;
   }
   .bar-fill {
     height: 100%;
     background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
-    box-shadow: 0 0 8px var(--cyan-glow);
+    box-shadow: 0 0 10px var(--cyan-glow);
     transition: width 0.6s ease;
+    border-radius: 2px;
+    position: relative;
+  }
+  .bar-fill::after {
+    content: "";
+    position: absolute; right: 0; top: 0; bottom: 0;
+    width: 8px; background: white;
+    opacity: 0.7; box-shadow: 0 0 8px white;
+  }
+  .bar-fill.warn { background: linear-gradient(90deg, #a88000, var(--gold)); }
+  .bar-fill.bad { background: linear-gradient(90deg, #a01858, var(--pink)); }
+
+  /* Sparkline */
+  .sparkline {
+    width: 100%; height: 40px;
+    display: block; margin: 4px 0 8px;
   }
 
-  .activity-item {
-    font-size: 10px;
-    padding: 6px 0 6px 12px;
+  /* Ambient card */
+  .ambient-card {
+    background: rgba(0, 229, 255, 0.03);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--cyan);
+    padding: 12px 14px;
+    border-radius: 3px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+  }
+  .ambient-card .ac-row {
+    display: grid;
+    grid-template-columns: 50px 1fr;
+    gap: 8px;
+    align-items: baseline;
+    padding: 4px 0;
+  }
+  .ambient-card .ac-k {
     color: var(--muted);
-    border-left: 1px solid var(--line-dim);
+    font-size: 9px; letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .ambient-card .ac-v {
+    color: var(--cyan);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    text-align: right;
+  }
+  .ambient-card .ac-v.ok { color: var(--green); }
+
+  /* File list */
+  .file-item {
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    padding: 5px 0 5px 10px;
+    color: var(--muted);
+    border-left: 1px solid var(--line);
+    margin: 2px 0;
+    letter-spacing: 0.05em;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .file-item::before {
+    content: "›";
+    color: var(--cyan-dim);
+    margin-right: 8px;
+  }
+
+  /* Activity */
+  .activity-item {
+    font-size: 10.5px;
+    padding: 7px 0 7px 12px;
+    color: var(--muted);
+    border-left: 1px solid var(--line);
     position: relative;
     line-height: 1.5;
-    letter-spacing: 0.05em;
+    font-family: "JetBrains Mono", monospace;
   }
   .activity-item::before {
-    content: "";
-    position: absolute;
-    left: -2px;
-    top: 12px;
+    content: ""; position: absolute;
+    left: -2px; top: 12px;
     width: 3px; height: 3px;
     background: var(--cyan);
-    box-shadow: 0 0 4px var(--cyan);
+    box-shadow: 0 0 6px var(--cyan);
     border-radius: 50%;
   }
   .activity-item .t {
     color: var(--cyan-dim);
-    margin-right: 6px;
-    font-size: 9px;
+    margin-right: 8px; font-size: 9px;
   }
   .activity-item.hot { color: var(--fg); }
   .activity-item.hot::before {
     background: var(--gold);
-    box-shadow: 0 0 6px var(--gold);
+    box-shadow: 0 0 8px var(--gold);
   }
 
-  .ref-group {
-    font-size: 8.5px;
-    letter-spacing: 0.35em;
-    color: var(--gold);
-    text-transform: uppercase;
-    margin: 14px 0 6px 0;
-    padding-left: 12px;
-    text-shadow: 0 0 6px var(--gold-glow);
+  /* Task cards */
+  .task-card {
+    padding: 10px 12px;
+    margin: 6px 0;
+    background: rgba(0, 229, 255, 0.03);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--cyan);
+    border-radius: 3px;
     position: relative;
+    transition: all 0.25s;
+    font-family: "JetBrains Mono", monospace;
   }
-  .ref-group:first-child { margin-top: 0; }
-  .ref-group::before {
-    content: "";
-    position: absolute;
-    left: 0;
-    top: 50%;
-    width: 4px;
-    height: 4px;
-    background: var(--gold);
-    box-shadow: 0 0 6px var(--gold-glow);
-    transform: translateY(-50%) rotate(45deg);
+  .task-card:hover {
+    background: rgba(0, 229, 255, 0.06);
+    border-left-color: var(--gold);
+    transform: translateX(3px);
+  }
+  .task-card .task-id {
+    position: absolute; top: 8px; right: 10px;
+    font-size: 9px; color: var(--cyan);
+    letter-spacing: 0.15em; opacity: 0.7;
+  }
+  .task-card .task-name {
+    color: var(--cyan); font-size: 11px;
+    font-weight: 600; display: block;
+    margin-bottom: 3px;
+  }
+  .task-card .task-meta {
+    color: var(--muted); font-size: 9px;
+    letter-spacing: 0.15em; text-transform: uppercase;
+  }
+  .task-card .task-meta .next { color: var(--gold); font-weight: 600; }
+
+  /* Tool leaderboard */
+  .tool-row {
+    display: grid;
+    grid-template-columns: 1fr 40px 40px;
+    gap: 6px; align-items: center;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    padding: 5px 0;
+    color: var(--muted);
+    border-bottom: 1px dashed rgba(0, 229, 255, 0.06);
+  }
+  .tool-row:last-child { border-bottom: none; }
+  .tool-row .tname {
+    color: var(--fg);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .tool-row .tcount { color: var(--cyan); font-weight: 600; text-align: right; }
+  .tool-row .trate { font-size: 9px; text-align: right; color: var(--green); }
+  .tool-row .trate.warn { color: var(--gold); }
+  .tool-row .trate.bad { color: var(--red); }
+
+  /* Quick commands chips */
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip {
+    padding: 5px 10px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 9.5px;
+    letter-spacing: 0.12em;
+    color: var(--cyan);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    background: rgba(0, 229, 255, 0.03);
+    cursor: pointer;
+    transition: all 0.2s;
+    text-transform: uppercase;
+    user-select: none;
+  }
+  .chip:hover {
+    background: rgba(0, 229, 255, 0.1);
+    border-color: var(--cyan);
+    box-shadow: 0 0 12px var(--cyan-glow);
+    transform: translateY(-1px);
+  }
+  .chip.active {
+    border-color: var(--gold);
+    color: var(--gold);
   }
 
-  /* ============ CENTER ============ */
+  /* Center */
   .center {
-    display: flex;
-    flex-direction: column;
+    display: flex; flex-direction: column;
     align-items: center;
-    padding: 0 40px;
+    padding: 0 30px;
     min-height: 0;
     overflow: hidden;
     position: relative;
   }
 
-  /* ---- Arc Reactor ---- */
+  /* Reactor */
   .reactor {
     position: relative;
-    width: 320px;
-    height: 320px;
-    margin: 6px 0 4px;
+    width: 320px; height: 320px;
+    margin: 0 0 4px;
     flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: flex; align-items: center; justify-content: center;
   }
-  .reactor svg {
-    position: absolute;
-    inset: 0;
-    overflow: visible;
-  }
+  .reactor svg { position: absolute; inset: 0; overflow: visible; }
   .reactor-core {
     position: relative;
-    width: 110px;
-    height: 110px;
+    width: 100px; height: 100px;
     border-radius: 50%;
     background: radial-gradient(circle at 40% 35%,
-      #bff4ff 0%, #6fe0f7 12%, #00e5ff 40%, #0088a8 70%, #003d4d 100%);
+      #e0faff 0%, #6fe0f7 12%, #00e5ff 40%, #0088a8 70%, #003d4d 100%);
     box-shadow:
-      0 0 40px var(--cyan),
-      0 0 90px var(--cyan-glow),
-      0 0 150px rgba(0, 229, 255, 0.3),
-      inset 0 0 30px rgba(255, 255, 255, 0.35);
+      0 0 50px var(--cyan),
+      0 0 110px var(--cyan-glow),
+      0 0 180px rgba(0, 229, 255, 0.35),
+      inset 0 0 40px rgba(255, 255, 255, 0.4);
     animation: reactorPulse 3s ease-in-out infinite;
     z-index: 3;
   }
   .reactor-core::before {
-    content: "";
-    position: absolute;
-    inset: 24px;
-    border-radius: 50%;
+    content: ""; position: absolute;
+    inset: 20px; border-radius: 50%;
     background: radial-gradient(circle, #ffffff 0%, #bff4ff 40%, transparent 75%);
-    opacity: 0.9;
+    opacity: 0.95;
     animation: coreShine 2s ease-in-out infinite;
   }
   .reactor-core::after {
-    content: "";
-    position: absolute;
-    inset: 0;
+    content: ""; position: absolute; inset: 0;
     border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.6);
-    box-shadow: inset 0 0 20px rgba(255,255,255,0.5);
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    box-shadow: inset 0 0 30px rgba(255,255,255,0.6);
   }
   @keyframes coreShine {
-    0%, 100% { opacity: 0.9; transform: scale(1); }
-    50% { opacity: 0.55; transform: scale(0.92); }
+    0%, 100% { opacity: 0.95; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.9); }
   }
-
-  .reactor-tri {
-    position: absolute;
-    inset: 0;
-    z-index: 2;
+  .radar-sweep {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    background: conic-gradient(from 0deg,
+      transparent 0deg,
+      transparent 340deg,
+      rgba(0, 229, 255, 0.15) 350deg,
+      rgba(0, 229, 255, 0.4) 358deg,
+      var(--cyan) 360deg);
+    animation: radarSweep 4s linear infinite;
+    z-index: 1;
+    mask-image: radial-gradient(circle, black 60%, transparent 100%);
+    -webkit-mask-image: radial-gradient(circle, black 60%, transparent 100%);
+    pointer-events: none;
   }
-  .reactor-tri::before, .reactor-tri::after {
-    content: "";
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0; height: 0;
-    border-left: 40px solid transparent;
-    border-right: 40px solid transparent;
-    border-bottom: 70px solid rgba(0, 229, 255, 0.05);
-    transform-origin: 0 0;
-    filter: drop-shadow(0 0 6px var(--cyan-glow));
-  }
-  .reactor-tri::before { transform: rotate(0deg) translate(-40px, -35px); }
-  .reactor-tri::after  { transform: rotate(180deg) translate(-40px, 35px); }
+  @keyframes radarSweep { to { transform: rotate(360deg); } }
 
   .app.listening .reactor-core {
     background: radial-gradient(circle at 40% 35%,
-      #c9ffd9 0%, #6fffa3 12%, #33ff99 40%, #00a855 70%, #004020 100%);
-    box-shadow:
-      0 0 45px var(--green),
-      0 0 100px rgba(51,255,153,0.5),
-      inset 0 0 30px rgba(255, 255, 255, 0.35);
+      #d9fff0 0%, #6fffa3 12%, #33ff99 40%, #00a855 70%, #004020 100%);
     animation: reactorPulse 1.4s ease-in-out infinite;
   }
   .app.thinking .reactor-core {
     background: radial-gradient(circle at 40% 35%,
-      #fff5c9 0%, #ffdd70 12%, #ffd700 40%, #a88000 70%, #3d2c00 100%);
-    box-shadow:
-      0 0 45px var(--yellow),
-      0 0 100px rgba(255,215,0,0.5),
-      inset 0 0 30px rgba(255, 255, 255, 0.35);
+      #fff9d9 0%, #ffdd70 12%, #ffd700 40%, #a88000 70%, #3d2c00 100%);
     animation: coreSpin 1s ease-in-out infinite;
   }
   .app.speaking .reactor-core {
     background: radial-gradient(circle at 40% 35%,
-      #ffd4e8 0%, #ff8fc4 12%, #ff2b8f 40%, #a01858 70%, #3d0720 100%);
-    box-shadow:
-      0 0 45px var(--pink),
-      0 0 100px rgba(255,43,143,0.5),
-      inset 0 0 30px rgba(255, 255, 255, 0.35);
+      #ffe0f0 0%, #ff8fc4 12%, #ff2b8f 40%, #a01858 70%, #3d0720 100%);
     animation: reactorPulse 0.7s ease-in-out infinite;
   }
   @keyframes coreSpin {
     0%, 100% { transform: scale(1) rotate(0deg); }
-    50% { transform: scale(1.08) rotate(180deg); }
+    50% { transform: scale(1.1) rotate(180deg); }
   }
 
-  /* ---- Transcript ---- */
+  /* Transcript */
   .transcript-wrap {
-    width: 100%;
-    max-width: 620px;
-    flex: 1;
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
+    width: 100%; max-width: 720px;
+    flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
     position: relative;
-    margin-top: 4px;
+    margin-top: 12px;
   }
   .transcript-label {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    font-size: 9px;
-    letter-spacing: 0.35em;
-    color: var(--cyan);
-    text-transform: uppercase;
-    margin-bottom: 10px;
-    text-shadow: 0 0 8px var(--cyan-glow);
+    display: flex; align-items: center; gap: 12px;
+    font-size: 9px; letter-spacing: 0.4em;
+    color: var(--cyan); text-transform: uppercase;
+    margin-bottom: 12px;
+    text-shadow: 0 0 10px var(--cyan-glow);
+    font-family: "JetBrains Mono", monospace;
+    font-weight: 600;
   }
   .transcript-label::before, .transcript-label::after {
-    content: "";
-    flex: 1;
-    height: 1px;
+    content: ""; flex: 1; height: 1px;
     background: linear-gradient(90deg, transparent 0%, var(--cyan-dim) 50%, transparent 100%);
-    opacity: 0.5;
+    opacity: 0.6;
   }
 
   .transcript {
     flex: 1;
     overflow-y: auto;
-    padding: 4px 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
+    padding: 4px 12px;
+    display: flex; flex-direction: column;
+    gap: 10px;
     scrollbar-width: thin;
     scrollbar-color: var(--cyan-dim) transparent;
-    mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 96%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
   }
   .transcript::-webkit-scrollbar { width: 4px; }
-  .transcript::-webkit-scrollbar-thumb { background: var(--cyan-dim); }
+  .transcript::-webkit-scrollbar-thumb { background: var(--cyan-dim); border-radius: 2px; }
 
   .msg {
     max-width: 82%;
-    padding: 8px 14px;
-    font-size: 12px;
+    padding: 12px 16px;
+    font-size: 12.5px;
     line-height: 1.6;
     animation: fadeUp 0.3s ease;
-    position: relative;
-    letter-spacing: 0.02em;
+    font-family: "JetBrains Mono", monospace;
+    letter-spacing: 0.01em;
   }
   .msg.user {
     align-self: flex-end;
-    background: rgba(0, 229, 255, 0.04);
-    border: 1px solid rgba(0, 229, 255, 0.2);
+    background: rgba(0, 229, 255, 0.06);
+    border: 1px solid rgba(0, 229, 255, 0.25);
     color: #dff6ff;
-    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+    clip-path: polygon(0 0, 100% 0, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0 100%);
   }
   .msg.jarvis {
     align-self: flex-start;
     background: rgba(0, 229, 255, 0.02);
-    border: 1px solid rgba(0, 229, 255, 0.12);
+    border: 1px solid rgba(0, 229, 255, 0.15);
     border-left: 2px solid var(--cyan);
     color: var(--fg);
-    box-shadow: inset 4px 0 12px rgba(0, 229, 255, 0.05);
+    box-shadow: inset 6px 0 16px rgba(0, 229, 255, 0.06);
+    clip-path: polygon(0 0, 100% 0, 100% 100%, 12px 100%, 0 calc(100% - 12px));
   }
   .msg .who {
     display: block;
-    font-size: 8px;
-    letter-spacing: 0.35em;
+    font-size: 8.5px;
+    letter-spacing: 0.4em;
     text-transform: uppercase;
     color: var(--muted);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
+    font-weight: 600;
   }
   .msg.user .who { color: #7dd3fc; text-align: right; }
-  .msg.jarvis .who { color: var(--cyan); }
-
+  .msg.jarvis .who { color: var(--cyan); text-shadow: 0 0 8px var(--cyan-glow); }
   @keyframes fadeUp {
-    from { opacity: 0; transform: translateY(6px); }
+    from { opacity: 0; transform: translateY(8px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
-  /* ---- Input ---- */
+  /* Cmd bar */
   .cmdbar {
-    width: 100%;
-    max-width: 620px;
-    margin-top: 10px;
-    padding-top: 12px;
-    border-top: 1px solid var(--line-dim);
+    width: 100%; max-width: 720px;
+    margin-top: 14px;
+    padding: 14px 16px;
+    background: var(--glass-hi);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--line);
+    border-radius: 4px;
     position: relative;
-    display: flex;
-    gap: 8px;
-    align-items: center;
+    display: flex; gap: 10px; align-items: center;
     flex-shrink: 0;
+    clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
   }
   .cmdbar::before {
-    content: "";
-    position: absolute;
-    top: -1px; left: 50%;
-    transform: translateX(-50%);
-    width: 80px;
-    height: 1px;
-    background: var(--cyan);
-    box-shadow: 0 0 8px var(--cyan-glow);
+    content: ""; position: absolute;
+    top: 0; left: 20px; right: 20px; height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--cyan) 50%, transparent 100%);
+    box-shadow: 0 0 10px var(--cyan-glow);
   }
-
   .cmd-prefix {
     color: var(--cyan);
-    font-size: 13px;
-    text-shadow: 0 0 6px var(--cyan-glow);
-    letter-spacing: 0.1em;
+    font-size: 14px;
+    text-shadow: 0 0 8px var(--cyan-glow);
+    font-family: "JetBrains Mono", monospace;
   }
-
   .cmdbar input {
     flex: 1;
     background: transparent;
     border: none;
-    border-bottom: 1px solid var(--line-dim);
     color: var(--fg);
-    padding: 10px 4px;
-    font-size: 13px;
-    font-family: inherit;
+    padding: 8px 4px;
+    font-size: 13.5px;
+    font-family: "JetBrains Mono", monospace;
     outline: none;
     letter-spacing: 0.03em;
-    transition: border-color 0.25s, box-shadow 0.25s;
-  }
-  .cmdbar input:focus {
-    border-color: var(--cyan);
-    box-shadow: 0 4px 12px -8px var(--cyan);
   }
   .cmdbar input:disabled { opacity: 0.4; }
-  .cmdbar input::placeholder { color: var(--dim); letter-spacing: 0.2em; }
-
+  .cmdbar input::placeholder {
+    color: var(--subtle);
+    letter-spacing: 0.15em;
+    font-size: 12px;
+  }
   .btn {
     background: transparent;
     border: 1px solid var(--cyan-dim);
     color: var(--cyan);
-    padding: 8px 16px;
+    padding: 8px 18px;
     font-size: 10px;
-    font-family: inherit;
-    letter-spacing: 0.25em;
+    font-family: "JetBrains Mono", monospace;
+    letter-spacing: 0.28em;
     text-transform: uppercase;
     cursor: pointer;
     transition: all 0.2s;
-    position: relative;
     clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px);
+    font-weight: 600;
   }
   .btn:hover {
-    background: rgba(0, 229, 255, 0.08);
+    background: rgba(0, 229, 255, 0.1);
     border-color: var(--cyan);
-    box-shadow: 0 0 16px var(--cyan-glow), inset 0 0 12px rgba(0, 229, 255, 0.15);
+    box-shadow: 0 0 20px var(--cyan-glow);
+    color: white;
   }
   .btn:disabled { opacity: 0.35; cursor: not-allowed; }
-  .btn.mic { padding: 8px 12px; font-size: 14px; letter-spacing: 0; }
+  .btn.mic { padding: 8px 14px; font-size: 14px; letter-spacing: 0; }
   .app.listening .btn.mic {
     border-color: var(--green);
     color: var(--green);
-    box-shadow: 0 0 20px rgba(51,255,153,0.5);
+    box-shadow: 0 0 24px rgba(0,255,157,0.6);
     animation: micPulse 1s ease-in-out infinite;
   }
   @keyframes micPulse {
-    0%, 100% { box-shadow: 0 0 16px rgba(51,255,153,0.4); }
-    50% { box-shadow: 0 0 28px rgba(51,255,153,0.8); }
+    0%, 100% { box-shadow: 0 0 18px rgba(0,255,157,0.4); }
+    50% { box-shadow: 0 0 32px rgba(0,255,157,0.9); }
   }
 
-  /* ============ BOTTOM BAR ============ */
-  .bottombar {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 8px;
-    font-size: 9px;
-    letter-spacing: 0.25em;
+  /* Ticker */
+  .ticker-wrap {
+    background: var(--glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    padding: 0 16px;
+    display: flex; align-items: center; gap: 20px;
+    overflow: hidden; position: relative;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 10px;
+    letter-spacing: 0.2em;
     color: var(--muted);
-    text-transform: uppercase;
-    position: relative;
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
   }
-  .bottombar::before {
-    content: "";
-    position: absolute;
-    left: 0; right: 0; top: 0;
-    height: 1px;
-    background: linear-gradient(90deg,
-      transparent 0%,
-      var(--cyan-dim) 15%,
-      var(--cyan) 50%,
-      var(--cyan-dim) 85%,
-      transparent 100%);
-    box-shadow: 0 0 8px var(--cyan-glow);
+  .ticker-wrap::before {
+    content: ""; position: absolute;
+    top: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--cyan-dim) 20%, var(--cyan) 50%, var(--cyan-dim) 80%, transparent 100%);
   }
-  .bottom-block { display: flex; align-items: center; gap: 18px; }
-  .bottom-block .val { color: var(--cyan); text-shadow: 0 0 6px var(--cyan-glow); }
+  .ticker-label {
+    color: var(--cyan);
+    letter-spacing: 0.3em;
+    font-weight: 600;
+    padding-right: 16px;
+    border-right: 1px solid var(--line);
+    text-shadow: 0 0 8px var(--cyan-glow);
+    flex-shrink: 0;
+    z-index: 2;
+    background: var(--glass);
+  }
+  .ticker-content {
+    flex: 1; overflow: hidden;
+    position: relative; white-space: nowrap; z-index: 1;
+  }
+  .ticker-scroll {
+    display: inline-block;
+    animation: tickerScroll 60s linear infinite;
+    padding-left: 100%;
+  }
+  .ticker-scroll span { margin-right: 40px; }
+  .ticker-scroll .hi { color: var(--cyan); }
+  .ticker-scroll .gold { color: var(--gold); }
+  .ticker-scroll .green { color: var(--green); }
+  @keyframes tickerScroll {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-100%); }
+  }
+  .ticker-right {
+    flex-shrink: 0;
+    padding-left: 16px;
+    border-left: 1px solid var(--line);
+    color: var(--cyan);
+    letter-spacing: 0.25em;
+    text-shadow: 0 0 6px var(--cyan-glow);
+    z-index: 2;
+    background: var(--glass);
+  }
 
-  /* ============ BOOT ============ */
+  /* Boot */
   .boot {
-    position: fixed;
-    inset: 0;
+    position: fixed; inset: 0;
     z-index: 100;
     background: var(--bg-0);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
+    display: flex; flex-direction: column;
+    justify-content: center; align-items: center;
     transition: opacity 0.8s ease;
-    font-size: 11px;
-    letter-spacing: 0.25em;
+    font-family: "JetBrains Mono", monospace;
     color: var(--cyan);
   }
   .boot.hide { opacity: 0; pointer-events: none; }
   .boot-logo {
-    font-size: 34px;
-    font-weight: 700;
-    letter-spacing: 0.65em;
-    margin-bottom: 6px;
-    text-shadow: 0 0 20px var(--cyan-glow), 0 0 40px rgba(0,229,255,0.4);
+    font-size: 44px; font-weight: 700;
+    letter-spacing: 0.75em;
+    margin-bottom: 8px;
+    text-shadow: 0 0 24px var(--cyan-glow), 0 0 48px rgba(0,229,255,0.4);
+    padding-left: 0.75em;
   }
   .boot-sub {
-    font-size: 9px;
-    letter-spacing: 0.5em;
-    color: var(--muted);
-    margin-bottom: 36px;
+    font-size: 9px; letter-spacing: 0.55em;
+    color: var(--muted); margin-bottom: 44px;
     text-transform: uppercase;
+    padding-left: 0.55em;
   }
   .boot-bar {
-    width: 380px;
-    height: 2px;
+    width: 420px; height: 2px;
     background: rgba(0, 229, 255, 0.1);
-    position: relative;
-    margin-bottom: 20px;
+    position: relative; margin-bottom: 24px;
     overflow: hidden;
   }
   .boot-bar-fill {
     height: 100%;
     background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
-    box-shadow: 0 0 10px var(--cyan);
+    box-shadow: 0 0 14px var(--cyan);
     width: 0%;
     animation: bootFill 2.4s ease-out forwards;
   }
   @keyframes bootFill { to { width: 100%; } }
-
-  .boot-lines { display: flex; flex-direction: column; gap: 6px; min-height: 100px; }
+  .boot-lines { display: flex; flex-direction: column; gap: 7px; min-height: 120px; }
   .boot-line {
-    opacity: 0;
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    color: var(--muted);
+    opacity: 0; font-size: 10.5px;
+    letter-spacing: 0.22em; color: var(--muted);
     animation: bootLine 0.4s ease forwards;
   }
-  .boot-line .ok { color: var(--green); text-shadow: 0 0 6px rgba(51,255,153,0.5); }
+  .boot-line .ok { color: var(--green); text-shadow: 0 0 8px rgba(0,255,157,0.5); }
   @keyframes bootLine {
-    from { opacity: 0; transform: translateX(-10px); }
+    from { opacity: 0; transform: translateX(-12px); }
     to { opacity: 1; transform: translateX(0); }
   }
 
-  /* Reactor in boot */
-  .boot-reactor {
-    width: 120px;
-    height: 120px;
-    border-radius: 50%;
-    border: 1px solid var(--cyan-dim);
-    position: absolute;
-    top: 60%;
-    left: 50%;
-    transform: translate(-50%, 0);
-    opacity: 0.2;
-    animation: spinSlow 20s linear infinite;
+  /* Toast */
+  .toast {
+    position: fixed; top: 80px; right: 24px;
+    background: var(--glass-hi);
+    backdrop-filter: blur(24px);
+    -webkit-backdrop-filter: blur(24px);
+    border: 1px solid var(--cyan);
+    border-left: 3px solid var(--cyan);
+    color: var(--fg);
+    padding: 16px 20px;
+    border-radius: 4px;
+    box-shadow: 0 0 32px var(--cyan-glow), 0 8px 32px rgba(0,0,0,0.5);
+    z-index: 9999;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 12px;
+    max-width: 360px;
+    line-height: 1.5;
+    animation: toastIn 0.4s cubic-bezier(0.22, 1, 0.36, 1);
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
   }
-  .boot-reactor::before {
-    content: "";
-    position: absolute;
-    inset: 20px;
-    border-radius: 50%;
-    border: 1px dashed var(--cyan-dim);
+  .toast.alert {
+    border-left-color: var(--gold);
+    border-color: var(--gold);
+    box-shadow: 0 0 36px var(--gold-glow), 0 8px 32px rgba(0,0,0,0.5);
   }
-  .boot-reactor::after {
-    content: "";
-    position: absolute;
-    inset: 40px;
-    border-radius: 50%;
-    background: var(--cyan);
-    box-shadow: 0 0 30px var(--cyan);
-    animation: reactorPulse 2s ease-in-out infinite;
-  }
-
-  @keyframes spinSlow {
-    from { transform: translate(-50%, 0) rotate(0deg); }
-    to { transform: translate(-50%, 0) rotate(360deg); }
-  }
-  @keyframes spinSlowNoOffset {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  /* ============ RESPONSIVE ============ */
-  @media (max-width: 1000px) {
-    .main {
-      grid-template-columns: 1fr;
-    }
-    .panel.left, .panel.right { display: none; }
-    .main::before, .main::after { display: none; }
-  }
-    /* ============ Rendered Markdown in JARVIS messages ============ */
-  .msg.jarvis h1,
-  .msg.jarvis h2,
-  .msg.jarvis h3 {
+  .toast .toast-title {
     color: var(--cyan);
-    font-size: 13px;
-    letter-spacing: 0.15em;
+    font-size: 9px;
+    letter-spacing: 0.35em;
+    margin-bottom: 8px;
     text-transform: uppercase;
-    margin: 14px 0 8px;
-    padding-bottom: 4px;
-    border-bottom: 1px solid var(--line-dim);
-  }
-  .msg.jarvis h1:first-child,
-  .msg.jarvis h2:first-child,
-  .msg.jarvis h3:first-child {
-    margin-top: 0;
-  }
-
-  .msg.jarvis p {
-    margin: 8px 0;
-  }
-
-  .msg.jarvis strong {
-    color: var(--cyan);
     font-weight: 600;
   }
-
-  .msg.jarvis em {
-    color: var(--gold);
-    font-style: italic;
+  .toast.alert .toast-title { color: var(--gold); }
+  .toast .toast-body { color: var(--fg); }
+  @keyframes toastIn {
+    from { transform: translateX(400px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  .toast.out {
+    transition: opacity 0.5s, transform 0.5s;
+    opacity: 0; transform: translateX(400px);
   }
 
-  .msg.jarvis ul,
-  .msg.jarvis ol {
-    margin: 8px 0 8px 20px;
-    padding-left: 8px;
+  /* Shortcuts modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10000;
+    display: none;
+    align-items: center; justify-content: center;
+    backdrop-filter: blur(8px);
   }
-  .msg.jarvis li {
-    margin: 4px 0;
-    line-height: 1.55;
+  .modal-backdrop.open { display: flex; }
+  .modal {
+    background: var(--glass-hi);
+    backdrop-filter: blur(24px);
+    border: 1px solid var(--cyan);
+    border-radius: 6px;
+    padding: 28px 32px;
+    max-width: 560px;
+    width: 90%;
+    font-family: "JetBrains Mono", monospace;
+    color: var(--fg);
+    box-shadow: 0 0 48px var(--cyan-glow);
   }
+  .modal h3 {
+    color: var(--cyan);
+    font-size: 12px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    margin-bottom: 20px;
+    text-shadow: 0 0 10px var(--cyan-glow);
+  }
+  .modal-row {
+    display: grid;
+    grid-template-columns: 180px 1fr;
+    gap: 16px;
+    padding: 6px 0;
+    font-size: 11px;
+    align-items: center;
+  }
+  .modal-row kbd {
+    background: rgba(0, 229, 255, 0.08);
+    border: 1px solid var(--line);
+    padding: 3px 8px;
+    border-radius: 3px;
+    color: var(--cyan);
+    font-size: 10px;
+    text-align: center;
+  }
+  .modal-row span { color: var(--muted); }
+
+  /* Markdown */
+  .msg.jarvis h1, .msg.jarvis h2, .msg.jarvis h3 {
+    color: var(--cyan); font-size: 13px;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    margin: 16px 0 10px; padding-bottom: 6px;
+    border-bottom: 1px solid var(--line);
+    text-shadow: 0 0 8px var(--cyan-glow);
+  }
+  .msg.jarvis h1:first-child, .msg.jarvis h2:first-child, .msg.jarvis h3:first-child { margin-top: 0; }
+  .msg.jarvis p { margin: 8px 0; }
+  .msg.jarvis strong { color: var(--cyan); font-weight: 600; }
+  .msg.jarvis em { color: var(--gold); font-style: italic; }
+  .msg.jarvis ul, .msg.jarvis ol { margin: 8px 0 8px 22px; padding-left: 8px; }
+  .msg.jarvis li { margin: 5px 0; line-height: 1.6; }
   .msg.jarvis ul li::marker { color: var(--cyan); }
   .msg.jarvis ol li::marker { color: var(--cyan); }
-
   .msg.jarvis code {
-    background: rgba(0, 229, 255, 0.08);
-    color: var(--cyan);
-    padding: 1px 6px;
-    border-radius: 3px;
-    font-size: 11px;
+    background: rgba(0, 229, 255, 0.1);
+    color: var(--cyan); padding: 2px 7px;
+    border-radius: 3px; font-size: 11px;
   }
-
   .msg.jarvis pre {
     background: rgba(0, 229, 255, 0.04);
-    border: 1px solid var(--line-dim);
+    border: 1px solid var(--line);
     border-left: 2px solid var(--cyan);
-    padding: 10px 14px;
-    margin: 10px 0;
-    overflow-x: auto;
-    font-size: 11px;
-    line-height: 1.5;
+    padding: 12px 16px; margin: 12px 0;
+    overflow-x: auto; font-size: 11px;
+    line-height: 1.55; border-radius: 3px;
   }
-  .msg.jarvis pre code {
-    background: transparent;
-    padding: 0;
-    color: var(--fg);
-  }
-
-  .msg.jarvis hr {
-    border: none;
-    border-top: 1px solid var(--line-dim);
-    margin: 12px 0;
-  }
-
-  .msg.jarvis a {
-    color: var(--cyan);
-    text-decoration: underline;
-  }
-
+  .msg.jarvis pre code { background: transparent; padding: 0; color: var(--fg); }
+  .msg.jarvis hr { border: none; border-top: 1px solid var(--line); margin: 14px 0; }
+  .msg.jarvis a { color: var(--cyan); text-decoration: underline; }
   .msg.jarvis blockquote {
     border-left: 2px solid var(--cyan-dim);
-    padding-left: 12px;
-    margin: 8px 0;
-    color: var(--muted);
-    font-style: italic;
+    padding-left: 14px; margin: 10px 0;
+    color: var(--muted); font-style: italic;
+  }
+
+  @media (max-width: 1100px) {
+    .main { grid-template-columns: 1fr; }
+    .glass-panel.left, .glass-panel.right { display: none; }
   }
 </style>
 </head>
 <body>
 
 <div class="stage"></div>
-<div class="scan"></div>
+<div class="particles" id="particles"></div>
+<div class="scan-h"></div>
 
-<!-- Corner brackets -->
 <div class="bracket tl"></div>
 <div class="bracket tr"></div>
 <div class="bracket bl"></div>
 <div class="bracket br"></div>
 
-<!-- Boot overlay -->
+<div class="tick-corner tl"></div>
+<div class="tick-corner tr"></div>
+<div class="tick-corner bl"></div>
+<div class="tick-corner br"></div>
+
 <div class="boot" id="boot">
   <div class="boot-logo">J A R V I S</div>
   <div class="boot-sub">Just A Rather Very Intelligent System</div>
   <div class="boot-bar"><div class="boot-bar-fill"></div></div>
   <div class="boot-lines">
-    <div class="boot-line" style="animation-delay: 0.1s;">> STARK INDUSTRIES // OS v0.4</div>
-    <div class="boot-line" style="animation-delay: 0.5s;">> INITIALIZING NEURAL CORE... <span class="ok">[ OK ]</span></div>
-    <div class="boot-line" style="animation-delay: 0.9s;">> LOADING SPEECH ENGINE... <span class="ok">[ OK ]</span></div>
-    <div class="boot-line" style="animation-delay: 1.3s;">> MOUNTING 30 TOOL MODULES... <span class="ok">[ OK ]</span></div>
-    <div class="boot-line" style="animation-delay: 1.7s;">> CALIBRATING AUDIO I/O... <span class="ok">[ OK ]</span></div>
-    <div class="boot-line" style="animation-delay: 2.1s;">> SYSTEM ONLINE.</div>
+    <div class="boot-line" style="animation-delay: 0.1s;">> STARK INDUSTRIES // OS v0.6</div>
+    <div class="boot-line" style="animation-delay: 0.4s;">> INITIALIZING NEURAL CORE... <span class="ok">[ OK ]</span></div>
+    <div class="boot-line" style="animation-delay: 0.7s;">> LOADING SPEECH ENGINE... <span class="ok">[ OK ]</span></div>
+    <div class="boot-line" style="animation-delay: 1.0s;">> MOUNTING 50 TOOL MODULES... <span class="ok">[ OK ]</span></div>
+    <div class="boot-line" style="animation-delay: 1.3s;">> STARTING BACKGROUND DAEMON... <span class="ok">[ OK ]</span></div>
+    <div class="boot-line" style="animation-delay: 1.6s;">> CONNECTING AMBIENT SENSORS... <span class="ok">[ OK ]</span></div>
+    <div class="boot-line" style="animation-delay: 2.0s;">> SYSTEM ONLINE.</div>
   </div>
-  <div class="boot-reactor"></div>
 </div>
 
-<!-- Main frame -->
+<!-- Shortcuts modal -->
+<div class="modal-backdrop" id="shortcutsModal">
+  <div class="modal">
+    <h3>Keyboard Shortcuts</h3>
+    <div class="modal-row"><kbd>Enter</kbd><span>Send command</span></div>
+    <div class="modal-row"><kbd>↑ / ↓</kbd><span>Navigate command history</span></div>
+    <div class="modal-row"><kbd>Tab</kbd><span>Autocomplete command</span></div>
+    <div class="modal-row"><kbd>/</kbd><span>Focus input (slash commands)</span></div>
+    <div class="modal-row"><kbd>?</kbd><span>Toggle this panel</span></div>
+    <div class="modal-row"><kbd>Ctrl + L</kbd><span>Clear transcript</span></div>
+    <div class="modal-row"><kbd>Esc</kbd><span>Close this panel</span></div>
+  </div>
+</div>
+
 <div class="frame app" id="app">
 
-  <!-- TOPBAR -->
   <div class="topbar">
     <div class="logo-block">
       <div class="logo-mark"></div>
       <div class="logo-text">
         <div class="logo-title">JARVIS</div>
-        <div class="logo-sub">Stark Industries · OS v0.4</div>
+        <div class="logo-sub">Stark Industries · OS v0.6</div>
       </div>
     </div>
     <div class="topcenter">
-      <span>SEC // 001</span>
+      <span>SEC <span class="hi">// 001</span></span>
       <span class="sep"></span>
-      <span>NODE // LOCAL</span>
+      <span>NODE <span class="hi">// LOCAL</span></span>
       <span class="sep"></span>
-      <span id="clock">--:--:--</span>
+      <span class="hi" id="clock">--:--:--</span>
     </div>
     <div class="status-pill" id="status">
       <span class="status-dot"></span>
@@ -967,111 +1098,136 @@
     </div>
   </div>
 
-  <!-- MAIN -->
   <div class="main">
 
     <!-- LEFT PANEL -->
-    <div class="panel left">
-      <div class="panel-block">
-        <div class="panel-title">System Core</div>
-        <div class="ring-meter">
-          <svg width="110" height="110" viewBox="0 0 110 110">
-            <circle cx="55" cy="55" r="48" fill="none" stroke="rgba(0,229,255,0.1)" stroke-width="1"/>
-            <circle cx="55" cy="55" r="44" fill="none" stroke="rgba(0,229,255,0.08)" stroke-width="1"/>
-            <circle id="ringArc" cx="55" cy="55" r="48"
-                    fill="none" stroke="#00e5ff" stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-dasharray="301.6"
-                    stroke-dashoffset="120"
-                    style="filter: drop-shadow(0 0 6px rgba(0,229,255,0.7)); transition: stroke-dashoffset 1s ease;"/>
-          </svg>
-          <div class="label">
-            <b id="corePct">68%</b>
-            CORE
+    <div class="glass-panel left">
+      <div class="panel-corner tl"></div>
+      <div class="panel-corner br"></div>
+      <div class="panel-inner">
+
+        <div>
+          <div class="section-title">System Core</div>
+          <div class="ring-meter">
+            <svg viewBox="0 0 130 130">
+              <circle cx="65" cy="65" r="58" fill="none" stroke="rgba(0,229,255,0.08)" stroke-width="1"/>
+              <circle cx="65" cy="65" r="52" fill="none" stroke="rgba(0,229,255,0.06)" stroke-width="1"/>
+              <circle id="ringArc" cx="65" cy="65" r="58"
+                      fill="none" stroke="#00e5ff" stroke-width="2"
+                      stroke-linecap="round" stroke-dasharray="364" stroke-dashoffset="140"
+                      style="filter: drop-shadow(0 0 8px rgba(0,229,255,0.9)); transition: stroke-dashoffset 1.2s ease;"/>
+            </svg>
+            <div class="label"><b id="corePct">68%</b>CORE</div>
           </div>
         </div>
-      </div>
 
-      <div class="panel-block">
-        <div class="panel-title">Status</div>
-        <div class="row"><span class="k">POWER</span><span class="v ok">98%</span></div>
-        <div class="row"><span class="k">NEURAL</span><span class="v ok">NOMINAL</span></div>
-        <div class="row"><span class="k">AUDIO IN</span><span class="v ok">READY</span></div>
-        <div class="row"><span class="k">AUDIO OUT</span><span class="v ok">READY</span></div>
-        <div class="row"><span class="k">UPTIME</span><span class="v" id="uptime">00:00</span></div>
-      </div>
+        <div>
+          <div class="section-title">Telemetry</div>
+          <svg class="sparkline" id="sparkline" viewBox="0 0 200 40" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#00e5ff" stop-opacity="0.5"/>
+                <stop offset="100%" stop-color="#00e5ff" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path id="sparkFill" fill="url(#sparkGrad)" d=""/>
+            <path id="sparkLine" fill="none" stroke="#00e5ff" stroke-width="1.5" d=""/>
+          </svg>
+        </div>
 
-      <div class="panel-block">
-        <div class="panel-title">Load</div>
-        <div class="row"><span class="k">CPU</span><span class="v" id="cpu">--%</span></div>
-        <div class="bar"><div class="bar-fill" id="cpuBar" style="width: 20%"></div></div>
-        <div class="row"><span class="k">MEM</span><span class="v" id="mem">--%</span></div>
-        <div class="bar"><div class="bar-fill" id="memBar" style="width: 35%"></div></div>
+        <div>
+          <div class="section-title">Ambient</div>
+          <div class="ambient-card">
+            <div class="ac-row">
+              <span class="ac-k">App</span>
+              <span class="ac-v" id="ambientApp" title="">—</span>
+            </div>
+            <div class="ac-row">
+              <span class="ac-k">Window</span>
+              <span class="ac-v" id="ambientWindow" title="">—</span>
+            </div>
+            <div class="ac-row">
+              <span class="ac-k">Idle</span>
+              <span class="ac-v ok" id="ambientIdle">0s</span>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="section-title">Status</div>
+          <div class="row"><span class="k">POWER</span><span class="v ok">98%</span></div>
+          <div class="row"><span class="k">NEURAL</span><span class="v ok">NOMINAL</span></div>
+          <div class="row"><span class="k">AUDIO</span><span class="v ok">READY</span></div>
+          <div class="row"><span class="k">UPTIME</span><span class="v" id="uptime">00:00</span></div>
+        </div>
+
+        <div>
+          <div class="section-title">Load</div>
+          <div class="row"><span class="k">CPU</span><span class="v cyan" id="cpu">--%</span></div>
+          <div class="bar"><div class="bar-fill" id="cpuBar" style="width: 20%"></div></div>
+          <div class="row"><span class="k">MEM</span><span class="v cyan" id="mem">--%</span></div>
+          <div class="bar"><div class="bar-fill" id="memBar" style="width: 35%"></div></div>
+          <div class="row"><span class="k">DISK</span><span class="v cyan" id="disk">--%</span></div>
+          <div class="bar"><div class="bar-fill" id="diskBar" style="width: 40%"></div></div>
+        </div>
+
+        <div>
+          <div class="section-title">Network</div>
+          <div class="row"><span class="k">↑ SENT</span><span class="v cyan" id="netSent">0 MB</span></div>
+          <div class="row"><span class="k">↓ RECV</span><span class="v cyan" id="netRecv">0 MB</span></div>
+        </div>
+
+        <div>
+          <div class="section-title">Recent Files</div>
+          <div id="recentFiles">
+            <div class="file-item">Loading...</div>
+          </div>
+        </div>
+
       </div>
     </div>
 
     <!-- CENTER -->
     <div class="center">
-
       <div class="reactor">
+        <div class="radar-sweep"></div>
         <svg viewBox="0 0 320 320" width="320" height="320">
-          <!-- Tick marks outer -->
-          <g id="ticks" stroke="#00e5ff" stroke-width="1" opacity="0.6"></g>
-
-          <!-- Rotating dashed outer -->
-          <circle cx="160" cy="160" r="152"
-                  fill="none"
-                  stroke="rgba(0,229,255,0.25)"
-                  stroke-width="1"
-                  stroke-dasharray="2 8"
-                  style="transform-origin: 160px 160px; animation: spinSlowNoOffset 40s linear infinite;"/>
-
-          <!-- Rotating solid arcs -->
-          <circle cx="160" cy="160" r="140"
-                  fill="none"
-                  stroke="#00e5ff"
-                  stroke-width="1.5"
-                  stroke-dasharray="220 660"
-                  stroke-linecap="round"
-                  opacity="0.85"
-                  style="transform-origin: 160px 160px; animation: spinSlowNoOffset 8s linear infinite; filter: drop-shadow(0 0 4px #00e5ff);"/>
-          <circle cx="160" cy="160" r="140"
-                  fill="none"
-                  stroke="rgba(0,229,255,0.3)"
-                  stroke-width="1"
-                  stroke-dasharray="100 780"
-                  stroke-linecap="round"
-                  style="transform-origin: 160px 160px; animation: spinSlowNoOffset 12s linear infinite reverse;"/>
-
-          <!-- Static inner ring -->
-          <circle cx="160" cy="160" r="90"
-                  fill="none"
-                  stroke="rgba(0,229,255,0.15)"
-                  stroke-width="1"/>
-
-          <!-- Waveform ring — bars drawn by JS -->
+          <g id="ticks" stroke="#00e5ff" stroke-width="1" opacity="0.55"></g>
+          <circle cx="160" cy="160" r="155" fill="none"
+                  stroke="rgba(0,229,255,0.2)" stroke-width="1"
+                  stroke-dasharray="2 10"
+                  style="transform-origin: 160px 160px; animation: spinNoOffset 60s linear infinite;"/>
+          <circle cx="160" cy="160" r="142" fill="none"
+                  stroke="#00e5ff" stroke-width="1.5"
+                  stroke-dasharray="230 660" stroke-linecap="round" opacity="0.9"
+                  style="transform-origin: 160px 160px; animation: spinNoOffset 8s linear infinite; filter: drop-shadow(0 0 6px #00e5ff);"/>
+          <circle cx="160" cy="160" r="142" fill="none"
+                  stroke="rgba(0,229,255,0.35)" stroke-width="1"
+                  stroke-dasharray="100 790" stroke-linecap="round"
+                  style="transform-origin: 160px 160px; animation: spinNoOffset 12s linear infinite reverse;"/>
+          <circle cx="160" cy="160" r="122" fill="none"
+                  stroke="rgba(157, 78, 221, 0.4)" stroke-width="1"
+                  stroke-dasharray="70 560" stroke-linecap="round"
+                  style="transform-origin: 160px 160px; animation: spinNoOffset 20s linear infinite; filter: drop-shadow(0 0 4px rgba(157,78,221,0.6));"/>
+          <circle cx="160" cy="160" r="85" fill="none"
+                  stroke="rgba(0,229,255,0.12)" stroke-width="1"/>
           <g id="waveBars" stroke-linecap="round"></g>
         </svg>
-
-        <!-- Triangular supports -->
-        <div class="reactor-tri"></div>
-
-        <!-- Core -->
         <div class="reactor-core"></div>
       </div>
 
       <div class="transcript-wrap">
-        <div class="transcript-label">TRANSMISSION LOG</div>
+        <div class="transcript-label">Transmission Log</div>
         <div class="transcript" id="transcript">
           <div class="msg jarvis">
             <span class="who">JARVIS</span>
-            All systems online. Awaiting directive.
+            All systems online. Awaiting directive. Press <strong>?</strong> for shortcuts.
           </div>
         </div>
 
         <div class="cmdbar">
-          <span class="cmd-prefix">›</span>
-          <input id="input" type="text" placeholder="ENTER COMMAND" autocomplete="off" spellcheck="false">
+          <span class="cmd-prefix mono">›</span>
+          <input id="input" type="text" placeholder="ENTER COMMAND · /help for shortcuts" autocomplete="off" spellcheck="false">
           <button class="btn mic" id="mic-btn" title="Voice input">◉</button>
           <button class="btn" id="send-btn">Execute</button>
         </div>
@@ -1079,66 +1235,83 @@
     </div>
 
     <!-- RIGHT PANEL -->
-    <div class="panel right">
-      <div class="panel-block">
-        <div class="panel-title">Activity Log</div>
-        <div id="activityList">
-          <div class="activity-item"><span class="t">--:--</span>System initialized</div>
-          <div class="activity-item"><span class="t">--:--</span>All modules loaded</div>
+    <div class="glass-panel right">
+      <div class="panel-corner tl"></div>
+      <div class="panel-corner br"></div>
+      <div class="panel-inner">
+
+        <div>
+          <div class="section-title">Scheduled Tasks</div>
+          <div id="taskList">
+            <div style="color: var(--muted); font-size: 10.5px; padding: 6px 0; font-family: 'JetBrains Mono', monospace;">
+              No tasks yet.
+            </div>
+          </div>
         </div>
-      </div>
 
-      <div class="panel-block">
-        <div class="panel-title">Command Reference</div>
+        <div>
+          <div class="section-title">Quick Commands</div>
+          <div class="chips" id="quickChips">
+            <div class="chip" data-cmd="what's the weather">Weather</div>
+            <div class="chip" data-cmd="/tasks">Tasks</div>
+            <div class="chip" data-cmd="battery">Battery</div>
+            <div class="chip" data-cmd="morning briefing">Briefing</div>
+            <div class="chip" data-cmd="what's on my screen">Screen</div>
+            <div class="chip" data-cmd="/stats">Stats</div>
+            <div class="chip" data-cmd="/tools">Tools</div>
+            <div class="chip" data-cmd="/lessons">Lessons</div>
+          </div>
+        </div>
 
-        <div class="ref-group">Intelligence</div>
-        <div class="activity-item">Weather in [city]</div>
-        <div class="activity-item">Search for [topic]</div>
-        <div class="activity-item">Latest news about [subject]</div>
-        <div class="activity-item">Tell me about [subject]</div>
+        <div>
+          <div class="section-title">Memory</div>
+          <div class="row"><span class="k">FACTS</span><span class="v cyan" id="memFacts">0</span></div>
+          <div class="row"><span class="k">CONVOS</span><span class="v cyan" id="memConvos">0</span></div>
+        </div>
 
-        <div class="ref-group">Workspace</div>
-        <div class="activity-item">Open Gmail</div>
-        <div class="activity-item">Open Calendar</div>
-        <div class="activity-item">Open GitHub</div>
-        <div class="activity-item">Open YouTube</div>
+        <div>
+          <div class="section-title">Top Tools</div>
+          <div id="toolLeaderboard">
+            <div style="color: var(--muted); font-size: 10px; padding: 6px 0; font-family: 'JetBrains Mono', monospace;">
+              No usage data yet.
+            </div>
+          </div>
+        </div>
 
-        <div class="ref-group">Productivity</div>
-        <div class="activity-item">Take a note: [text]</div>
-        <div class="activity-item">Read my notes</div>
-        <div class="activity-item">Set a timer for [N] minutes</div>
+        <div>
+          <div class="section-title">Activity</div>
+          <div id="activityList">
+            <div class="activity-item"><span class="t">--:--</span>System initialized</div>
+          </div>
+        </div>
 
-        <div class="ref-group">System</div>
-        <div class="activity-item">Battery status</div>
-        <div class="activity-item">System info</div>
-        <div class="activity-item">Public IP address</div>
-      </div>
+        <div>
+          <div class="section-title">Session</div>
+          <div class="row"><span class="k">COMMANDS</span><span class="v cyan" id="cmdCount">0</span></div>
+          <div class="row"><span class="k">TOOLS</span><span class="v cyan">50+</span></div>
+          <div class="row"><span class="k">MODEL</span><span class="v cyan">CEREBRAS</span></div>
+          <div class="row"><span class="k">DAEMON</span><span class="v ok">ACTIVE</span></div>
+        </div>
 
-      <div class="panel-block">
-        <div class="panel-title">Session</div>
-        <div class="row"><span class="k">COMMANDS</span><span class="v" id="cmdCount">0</span></div>
-        <div class="row"><span class="k">TOOLS</span><span class="v">30</span></div>
-        <div class="row"><span class="k">MODEL</span><span class="v">GPT-OSS</span></div>
       </div>
     </div>
+
   </div>
 
-  <!-- BOTTOM BAR -->
-  <div class="bottombar">
-    <div class="bottom-block">
-      <span>STARK INDUSTRIES © 2026</span>
-      <span>·</span>
-      <span>MODULES: <span class="val">30</span></span>
-      <span>·</span>
-      <span>SESSION: <span class="val" id="session2">00:00</span></span>
+  <div class="ticker-wrap">
+    <div class="ticker-label">SYS.LOG</div>
+    <div class="ticker-content">
+      <div class="ticker-scroll" id="tickerScroll">
+        <span><span class="hi">NEURAL</span> core nominal</span>
+        <span>ambient context synced</span>
+        <span><span class="hi">AMBIENT</span> tracker active</span>
+        <span>daemon <span class="green">RUNNING</span></span>
+        <span>tool registry <span class="hi">50+</span> modules</span>
+        <span>streaming <span class="green">ONLINE</span></span>
+        <span>ready for input</span>
+      </div>
     </div>
-    <div class="bottom-block">
-      <span>PWR <span class="val">98%</span></span>
-      <span>·</span>
-      <span>NET <span class="val">SECURE</span></span>
-      <span>·</span>
-      <span id="statusBottom">STATUS: <span class="val">IDLE</span></span>
-    </div>
+    <div class="ticker-right">SESSION <span id="session2">00:00</span></div>
   </div>
 </div>
 
@@ -1155,45 +1328,58 @@
   const session2El = document.getElementById("session2");
   const cmdCountEl = document.getElementById("cmdCount");
   const activityList = document.getElementById("activityList");
-  const statusBottom = document.getElementById("statusBottom");
+  const taskListEl = document.getElementById("taskList");
+  const ambientApp = document.getElementById("ambientApp");
+  const ambientWindow = document.getElementById("ambientWindow");
+  const ambientIdle = document.getElementById("ambientIdle");
+  const shortcutsModal = document.getElementById("shortcutsModal");
 
   let commandCount = 0;
   const sessionStart = Date.now();
 
-  // ============ Generate outer tick marks ============
-  (function buildTicks() {
+  /* ============ Particles ============ */
+  (function () {
+    const c = document.getElementById("particles");
+    for (let i = 0; i < 30; i++) {
+      const p = document.createElement("div");
+      p.className = "particle";
+      p.style.left = Math.random() * 100 + "%";
+      p.style.animationDelay = Math.random() * 12 + "s";
+      p.style.animationDuration = (10 + Math.random() * 8) + "s";
+      c.appendChild(p);
+    }
+  })();
+
+  /* ============ Ticks ============ */
+  (function () {
     const g = document.getElementById("ticks");
-    const cx = 160, cy = 160;
-    const r1 = 155, r2 = 148;
-    const n = 72;
+    const cx = 160, cy = 160, r1 = 158, r2 = 148, n = 84;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
-      const long = i % 6 === 0;
-      const x1 = cx + Math.cos(a) * (long ? r1 - 6 : r1);
-      const y1 = cy + Math.sin(a) * (long ? r1 - 6 : r1);
+      const long = i % 7 === 0;
+      const x1 = cx + Math.cos(a) * (long ? r1 - 8 : r1);
+      const y1 = cy + Math.sin(a) * (long ? r1 - 8 : r1);
       const x2 = cx + Math.cos(a) * r2;
       const y2 = cy + Math.sin(a) * r2;
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       line.setAttribute("x1", x1); line.setAttribute("y1", y1);
       line.setAttribute("x2", x2); line.setAttribute("y2", y2);
-      line.setAttribute("opacity", long ? "0.9" : "0.35");
+      line.setAttribute("opacity", long ? "1" : "0.35");
       g.appendChild(line);
     }
   })();
 
-  // ============ Generate waveform bars around inner ring ============
+  /* ============ Wave bars ============ */
   const waveBars = [];
-  (function buildWave() {
+  (function () {
     const g = document.getElementById("waveBars");
-    const cx = 160, cy = 160;
-    const rInner = 90;
-    const n = 56;
+    const cx = 160, cy = 160, rInner = 85, n = 64;
     for (let i = 0; i < n; i++) {
       const a = (i / n) * Math.PI * 2;
       const x1 = cx + Math.cos(a) * rInner;
       const y1 = cy + Math.sin(a) * rInner;
-      const x2 = cx + Math.cos(a) * (rInner + 6);
-      const y2 = cy + Math.sin(a) * (rInner + 6);
+      const x2 = cx + Math.cos(a) * (rInner + 8);
+      const y2 = cy + Math.sin(a) * (rInner + 8);
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       line.setAttribute("x1", x1); line.setAttribute("y1", y1);
       line.setAttribute("x2", x2); line.setAttribute("y2", y2);
@@ -1205,33 +1391,46 @@
     }
   })();
 
-  // Animate waveform based on state
   function animateWave() {
     const t = Date.now() / 200;
-    const stateClass = app.className;
-    const active = stateClass.includes("listening") ||
-                   stateClass.includes("speaking") ||
-                   stateClass.includes("thinking");
-    const baseAmp = stateClass.includes("listening") ? 22 :
-                    stateClass.includes("speaking")   ? 26 :
-                    stateClass.includes("thinking")   ? 12 : 4;
-    const speed = stateClass.includes("speaking") ? 1.6 :
-                  stateClass.includes("listening") ? 1.2 : 1;
-
+    const cls = app.className;
+    const active = cls.includes("listening") || cls.includes("speaking") || cls.includes("thinking");
+    const baseAmp = cls.includes("listening") ? 26 :
+                    cls.includes("speaking")   ? 30 :
+                    cls.includes("thinking")   ? 14 : 5;
+    const speed = cls.includes("speaking") ? 1.6 : cls.includes("listening") ? 1.2 : 1;
     waveBars.forEach((b, i) => {
       const wave = Math.sin(t * speed + i * 0.6) * 0.5 + 0.5;
-      const amp = active ? baseAmp * (0.4 + wave * 0.9) : 3 + wave * 2;
-      const x2 = b.cx + Math.cos(b.a) * (b.rInner + amp);
-      const y2 = b.cy + Math.sin(b.a) * (b.rInner + amp);
-      b.el.setAttribute("x2", x2);
-      b.el.setAttribute("y2", y2);
-      b.el.setAttribute("opacity", active ? (0.5 + wave * 0.5) : 0.25);
+      const amp = active ? baseAmp * (0.4 + wave * 0.9) : 3 + wave * 3;
+      b.el.setAttribute("x2", b.cx + Math.cos(b.a) * (b.rInner + amp));
+      b.el.setAttribute("y2", b.cy + Math.sin(b.a) * (b.rInner + amp));
+      b.el.setAttribute("opacity", active ? (0.6 + wave * 0.4) : 0.25);
     });
     requestAnimationFrame(animateWave);
   }
   animateWave();
 
-  // ============ Live clock, uptime ============
+  /* ============ Sparkline ============ */
+  const sparkData = [];
+  for (let i = 0; i < 40; i++) sparkData.push(30 + Math.random() * 40);
+  function drawSparkline() {
+    const line = document.getElementById("sparkLine");
+    const fill = document.getElementById("sparkFill");
+    const w = 200, h = 40;
+    const step = w / (sparkData.length - 1);
+    let d = "M 0 " + (h - sparkData[0] / 100 * h);
+    sparkData.forEach((v, i) => { d += " L " + (i * step) + " " + (h - v / 100 * h); });
+    line.setAttribute("d", d);
+    fill.setAttribute("d", d + " L " + w + " " + h + " L 0 " + h + " Z");
+  }
+  setInterval(() => {
+    sparkData.shift();
+    sparkData.push(20 + Math.random() * 60);
+    drawSparkline();
+  }, 800);
+  drawSparkline();
+
+  /* ============ Clock ============ */
   function updateClock() {
     const now = new Date();
     clockEl.textContent = now.toTimeString().slice(0, 8);
@@ -1244,49 +1443,21 @@
   setInterval(updateClock, 1000);
   updateClock();
 
-  // ============ Fake load meters ============
-  function updateLoad() {
-    const cpu = 12 + Math.floor(Math.random() * 22);
-    const mem = 32 + Math.floor(Math.random() * 14);
-    document.getElementById("cpu").textContent = cpu + "%";
-    document.getElementById("mem").textContent = mem + "%";
-    document.getElementById("cpuBar").style.width = cpu + "%";
-    document.getElementById("memBar").style.width = mem + "%";
-    document.getElementById("corePct").textContent = (60 + Math.floor(Math.random() * 15)) + "%";
-  }
-  setInterval(updateLoad, 2500);
-  updateLoad();
-
-  // ============ Status ============
+  /* ============ State ============ */
   function setState(state) {
     app.className = "frame app" + (state ? " " + state : "");
     statusEl.className = "status-pill" + (state ? " " + state : "");
-    const label = state ? state.toUpperCase() : "IDLE";
-    statusText.textContent = label;
-    statusBottom.innerHTML = `STATUS: <span class="val">${label}</span>`;
-    const colors = {
-      listening: "#33ff99",
-      thinking: "#ffd700",
-      speaking: "#ff2b8f",
-      error: "#ff3355",
-      "": "#00e5ff"
-    };
-    statusBottom.querySelector(".val").style.color = colors[state] || "#00e5ff";
-    statusBottom.querySelector(".val").style.textShadow = `0 0 6px ${colors[state] || "#00e5ff"}`;
+    statusText.textContent = state ? state.toUpperCase() : "IDLE";
   }
-
-  // ============ Messages ============
-  function estimateSpeechMs(text) {
-    return Math.max(1400, Math.min(14000, text.length * 72));
-  }
+  function estimateSpeechMs(t) { return Math.max(1400, Math.min(14000, t.length * 72)); }
 
   function addMessage(who, text) {
     const div = document.createElement("div");
     div.className = "msg " + (who === "You" ? "user" : "jarvis");
-    const label = document.createElement("span");
-    label.className = "who";
-    label.textContent = who === "You" ? "OPERATOR" : "JARVIS";
-    div.appendChild(label);
+    const l = document.createElement("span");
+    l.className = "who";
+    l.textContent = who === "You" ? "OPERATOR" : "JARVIS";
+    div.appendChild(l);
     div.appendChild(document.createTextNode(text));
     transcript.appendChild(div);
     transcript.scrollTop = transcript.scrollHeight;
@@ -1298,18 +1469,178 @@
     item.className = "activity-item" + (hot ? " hot" : "");
     item.innerHTML = `<span class="t">${now}</span>${text}`;
     activityList.insertBefore(item, activityList.firstChild);
-    while (activityList.children.length > 10) {
-      activityList.removeChild(activityList.lastChild);
+    while (activityList.children.length > 6) activityList.removeChild(activityList.lastChild);
+  }
+
+  function bumpCount() { commandCount++; cmdCountEl.textContent = commandCount; }
+
+  /* ============ Notifications ============ */
+  function showNotification(n) {
+    const t = document.createElement("div");
+    t.className = "toast" + (n.kind === "alert" ? " alert" : "");
+    t.innerHTML = `<div class="toast-title">${n.title} · ${n.time}</div><div class="toast-body">${n.body}</div>`;
+    document.body.appendChild(t);
+    setTimeout(() => { t.classList.add("out"); setTimeout(() => t.remove(), 500); }, 8000);
+    logActivity("! " + n.title);
+  }
+  setInterval(async () => {
+    try {
+      const r = await fetch("/api/notifications");
+      const d = await r.json();
+      if (d.notifications && d.notifications.length) d.notifications.forEach(showNotification);
+    } catch (e) {}
+  }, 3000);
+
+  /* ============ System stats ============ */
+  async function refreshSystem() {
+    try {
+      const r = await fetch("/api/system");
+      const d = await r.json();
+      if (d.error) return;
+      document.getElementById("cpu").textContent = d.cpu + "%";
+      document.getElementById("mem").textContent = d.mem + "%";
+      document.getElementById("disk").textContent = d.disk + "%";
+      const cpuBar = document.getElementById("cpuBar");
+      const memBar = document.getElementById("memBar");
+      const diskBar = document.getElementById("diskBar");
+      cpuBar.style.width = d.cpu + "%";
+      memBar.style.width = d.mem + "%";
+      diskBar.style.width = d.disk + "%";
+      cpuBar.className = "bar-fill" + (d.cpu > 80 ? " bad" : d.cpu > 60 ? " warn" : "");
+      memBar.className = "bar-fill" + (d.mem > 80 ? " bad" : d.mem > 60 ? " warn" : "");
+      diskBar.className = "bar-fill" + (d.disk > 90 ? " bad" : d.disk > 75 ? " warn" : "");
+      document.getElementById("netSent").textContent = d.net_sent_mb + " MB";
+      document.getElementById("netRecv").textContent = d.net_recv_mb + " MB";
+      document.getElementById("corePct").textContent = d.cpu + "%";
+      const arc = document.getElementById("ringArc");
+      if (arc) arc.setAttribute("stroke-dashoffset", 364 * (1 - d.cpu / 100));
+    } catch (e) {}
+  }
+  refreshSystem();
+  setInterval(refreshSystem, 3000);
+
+  /* ============ Ambient ============ */
+  async function refreshAmbient() {
+    try {
+      const r = await fetch("/api/ambient");
+      const d = await r.json();
+      if (d.active_app) {
+        ambientApp.textContent = d.active_app;
+        ambientApp.title = d.active_app;
+      } else {
+        ambientApp.textContent = "—";
+      }
+      if (d.active_window) {
+        ambientWindow.textContent = d.active_window;
+        ambientWindow.title = d.active_window;
+      } else {
+        ambientWindow.textContent = "—";
+      }
+      const idle = d.idle || 0;
+      if (idle < 60) ambientIdle.textContent = idle + "s";
+      else if (idle < 3600) ambientIdle.textContent = Math.floor(idle / 60) + "m";
+      else ambientIdle.textContent = Math.floor(idle / 3600) + "h";
+    } catch (e) {
+      ambientApp.textContent = "—";
+      ambientWindow.textContent = "—";
     }
   }
+  refreshAmbient();
+  setInterval(refreshAmbient, 5000);
 
-  function bumpCount() {
-    commandCount++;
-    cmdCountEl.textContent = commandCount;
+  /* ============ Memory stats ============ */
+  async function refreshMemory() {
+    try {
+      const r = await fetch("/api/memory-stats");
+      const d = await r.json();
+      document.getElementById("memFacts").textContent = d.facts || 0;
+      document.getElementById("memConvos").textContent = d.conversations || 0;
+    } catch (e) {}
   }
+  refreshMemory();
+  setInterval(refreshMemory, 15000);
 
-  // ============ Commands ============
-    async function sendCommand(text) {
+  /* ============ Tool leaderboard ============ */
+  async function refreshTools() {
+    try {
+      const r = await fetch("/api/tool-stats");
+      const d = await r.json();
+      const el = document.getElementById("toolLeaderboard");
+      if (!d.tools || !d.tools.length) {
+        el.innerHTML = '<div style="color: var(--muted); font-size: 10px; padding: 6px 0; font-family: \'JetBrains Mono\', monospace;">No usage data yet.</div>';
+        return;
+      }
+      el.innerHTML = "";
+      d.tools.forEach(t => {
+        const rc = t.rate >= 90 ? "" : t.rate >= 70 ? "warn" : "bad";
+        const row = document.createElement("div");
+        row.className = "tool-row";
+        row.innerHTML = `<span class="tname" title="${t.name}">${t.name}</span><span class="tcount">${t.calls}</span><span class="trate ${rc}">${t.rate}%</span>`;
+        el.appendChild(row);
+      });
+    } catch (e) {}
+  }
+  refreshTools();
+  setInterval(refreshTools, 15000);
+
+  /* ============ Recent files ============ */
+  async function refreshFiles() {
+    try {
+      const r = await fetch("/api/recent-files");
+      const d = await r.json();
+      const el = document.getElementById("recentFiles");
+      if (!d.files || !d.files.length) {
+        el.innerHTML = '<div class="file-item">No recent activity</div>';
+        return;
+      }
+      el.innerHTML = "";
+      d.files.forEach(f => {
+        const item = document.createElement("div");
+        item.className = "file-item";
+        item.textContent = f;
+        item.title = f;
+        el.appendChild(item);
+      });
+    } catch (e) {}
+  }
+  refreshFiles();
+  setInterval(refreshFiles, 20000);
+
+  /* ============ Tasks ============ */
+  async function refreshTasks() {
+    try {
+      const r = await fetch("/api/tasks");
+      const d = await r.json();
+      if (!d.tasks || !d.tasks.length) {
+        taskListEl.innerHTML = '<div style="color: var(--muted); font-size: 10.5px; padding: 6px 0; font-family: \'JetBrains Mono\', monospace;">No tasks yet.</div>';
+        return;
+      }
+      taskListEl.innerHTML = "";
+      d.tasks.forEach(t => {
+        const item = document.createElement("div");
+        item.className = "task-card";
+        const next = t.next_run_at ? t.next_run_at.slice(11, 16) : "—";
+        item.innerHTML = `<span class="task-id">#${t.id}</span><span class="task-name">${t.name}</span><span class="task-meta">${t.type} · ${t.run_count || 0} runs · next <span class="next">${next}</span></span>`;
+        taskListEl.appendChild(item);
+      });
+    } catch (e) {}
+  }
+  refreshTasks();
+  setInterval(refreshTasks, 10000);
+
+  /* ============ Quick chips ============ */
+  document.querySelectorAll("#quickChips .chip").forEach(chip => {
+    chip.addEventListener("click", () => {
+      const cmd = chip.getAttribute("data-cmd");
+      chip.classList.add("active");
+      setTimeout(() => chip.classList.remove("active"), 400);
+      pushHistory(cmd);
+      sendCommand(cmd);
+    });
+  });
+
+  /* ============ Commands ============ */
+  async function sendCommand(text) {
     if (!text.trim()) return;
     input.value = "";
     addMessage("You", text);
@@ -1317,30 +1648,21 @@
     bumpCount();
     setState("thinking");
 
-    // Reply bubble with status ABOVE text
     const replyDiv = document.createElement("div");
     replyDiv.className = "msg jarvis";
-
     const label = document.createElement("span");
     label.className = "who";
     label.textContent = "JARVIS";
     replyDiv.appendChild(label);
 
-    // Status container (above text)
-    const statusContainer = document.createElement("div");
-    statusContainer.style.fontSize = "11px";
-    statusContainer.style.color = "var(--muted)";
-    statusContainer.style.fontStyle = "italic";
-    statusContainer.style.marginBottom = "4px";
-    replyDiv.appendChild(statusContainer);
+    const statusC = document.createElement("div");
+    statusC.style.cssText = "font-size:11px;color:var(--muted);font-style:italic;margin-bottom:4px;font-family:'JetBrains Mono',monospace;";
+    replyDiv.appendChild(statusC);
 
-    // Plan block (filled only if the reply starts with a plan)
-    const planBlock = document.createElement("div");
-    planBlock.style.display = "none";
-    planBlock.style.cssText = "display:none; background: rgba(255,179,71,0.06); border-left: 2px solid var(--gold); padding: 10px 14px; margin-bottom: 10px; font-size: 11.5px; color: var(--gold); line-height: 1.6; white-space: pre-wrap;";
-    replyDiv.appendChild(planBlock);
+    const planB = document.createElement("div");
+    planB.style.cssText = "display:none;background:rgba(255,179,71,0.08);border-left:2px solid var(--gold);padding:12px 16px;margin-bottom:12px;font-size:11.5px;color:var(--gold);line-height:1.65;white-space:pre-wrap;font-family:'JetBrains Mono',monospace;border-radius:3px;";
+    replyDiv.appendChild(planB);
 
-    // Text content
     const textSpan = document.createElement("span");
     replyDiv.appendChild(textSpan);
 
@@ -1353,63 +1675,49 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
       });
-
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = "";
-      let fullReply = "";
+      let buffer = "", fullReply = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-
         const events = buffer.split("\n\n");
         buffer = events.pop();
 
         for (const event of events) {
           if (!event.startsWith("data: ")) continue;
-          let payload;
-          try {
-            payload = JSON.parse(event.slice(6));
-          } catch (e) { continue; }
+          let p;
+          try { p = JSON.parse(event.slice(6)); } catch (e) { continue; }
 
-          if (payload.kind === "plan") {
-            planBlock.style.display = "block";
-            planBlock.textContent += payload.text;
+          if (p.kind === "plan") {
+            planB.style.display = "block";
+            planB.textContent += p.text;
             transcript.scrollTop = transcript.scrollHeight;
-
-          } else if (payload.kind === "content") {
-            if (payload.text === "__CLEAR__") {
-              while (transcript.firstChild) {
-                transcript.removeChild(transcript.firstChild);
-              }
-              const resetMsg = document.createElement("div");
-              resetMsg.className = "msg jarvis";
-              resetMsg.innerHTML = '<span class="who">JARVIS</span>Session cleared. Ready.';
-              transcript.appendChild(resetMsg);
+          } else if (p.kind === "content") {
+            if (p.text === "__CLEAR__") {
+              while (transcript.firstChild) transcript.removeChild(transcript.firstChild);
+              const rm = document.createElement("div");
+              rm.className = "msg jarvis";
+              rm.innerHTML = '<span class="who">JARVIS</span>Session cleared. Ready.';
+              transcript.appendChild(rm);
               replyDiv.remove();
               return;
             }
-            fullReply += payload.text;
-            // Render markdown on every chunk
+            fullReply += p.text;
             textSpan.innerHTML = marked.parse(fullReply, { breaks: true, gfm: true });
             transcript.scrollTop = transcript.scrollHeight;
-
-          } else if (payload.kind === "status") {
-            const statusLine = document.createElement("div");
-            statusLine.textContent = payload.text;
-            statusContainer.appendChild(statusLine);
-            transcript.scrollTop = transcript.scrollHeight;
-
-          } else if (payload.kind === "done") {
+          } else if (p.kind === "status") {
+            const s = document.createElement("div");
+            s.textContent = p.text;
+            statusC.appendChild(s);
+          } else if (p.kind === "done") {
             setState("speaking");
-            setTimeout(() => {
-              setState("");
-              statusContainer.style.display = "none";
-            }, estimateSpeechMs(fullReply));
-
-          } else if (payload.kind === "exit") {
+            setTimeout(() => { setState(""); statusC.style.display = "none"; }, estimateSpeechMs(fullReply));
+            refreshTasks();
+            refreshTools();
+          } else if (p.kind === "exit") {
             textSpan.textContent = "Goodbye.";
             setTimeout(() => {
               input.disabled = true;
@@ -1419,9 +1727,8 @@
               setState("");
             }, estimateSpeechMs("Goodbye."));
             return;
-
-          } else if (payload.kind === "error") {
-            textSpan.textContent = "Error: " + payload.text;
+          } else if (p.kind === "error") {
+            textSpan.textContent = "Error: " + p.text;
             setState("error");
             setTimeout(() => setState(""), 1500);
           }
@@ -1438,23 +1745,15 @@
     micBtn.disabled = true;
     setState("listening");
     logActivity("Listening...", true);
-
     try {
-      const res = await fetch("/api/voice", { method: "POST" });
-      const data = await res.json();
-
-      if (data.error) {
-        addMessage("JARVIS", data.error);
-        setState("");
-        return;
-      }
-
-      addMessage("You", data.user);
-      addMessage("JARVIS", data.reply);
+      const r = await fetch("/api/voice", { method: "POST" });
+      const d = await r.json();
+      if (d.error) { addMessage("JARVIS", d.error); setState(""); return; }
+      addMessage("You", d.user);
+      addMessage("JARVIS", d.reply);
       bumpCount();
-      logActivity("&gt; " + data.user.slice(0, 26), true);
-
-      if (data.exit) {
+      logActivity("&gt; " + d.user.slice(0, 26), true);
+      if (d.exit) {
         setState("speaking");
         setTimeout(() => {
           input.disabled = true;
@@ -1462,16 +1761,11 @@
           micBtn.disabled = true;
           input.placeholder = "SESSION TERMINATED — REFRESH TO REBOOT";
           setState("");
-        }, estimateSpeechMs(data.reply));
+        }, estimateSpeechMs(d.reply));
         return;
       }
-
-      if (data.speak) {
-        setState("speaking");
-        setTimeout(() => setState(""), estimateSpeechMs(data.reply));
-      } else {
-        setState("");
-      }
+      if (d.speak) { setState("speaking"); setTimeout(() => setState(""), estimateSpeechMs(d.reply)); }
+      else { setState(""); }
     } catch (e) {
       addMessage("JARVIS", "Voice error: " + e.message);
       setState("error");
@@ -1481,96 +1775,92 @@
     }
   }
 
+  /* ============ History + Tab ============ */
+  const history = [];
+  let hIdx = -1;
+  const SLASH = ["/w ", "/weather ", "/s ", "/search ", "/n ", "/news ", "/p ", "/play ", "/stop", "/t ", "/translate ", "/wiki ", "/c ", "/calc ", "/note ", "/remind ", "/screen ", "/read", "/error", "/index ", "/ask ", "/clear", "/help", "/tasks", "/daemon", "/ambient", "/tools", "/stats", "/lessons"];
+  const WORDS = {"wea":"what's the weather in ","sea":"search for ","play":"play ","tran":"translate ","news":"latest news about ","note":"take a note: ","remind":"remind me ","wiki":"tell me about ","calc":"what's ","help":"/help","clear":"/clear"};
+  function handleTab(e) {
+    const v = input.value;
+    if (!v.startsWith("/")) {
+      const fw = v.split(" ")[0].toLowerCase();
+      if (WORDS[fw] && v.split(" ").length === 1) { input.value = WORDS[fw]; e.preventDefault(); }
+      return;
+    }
+    const m = SLASH.filter(c => c.startsWith(v));
+    if (m.length === 1) { input.value = m[0]; e.preventDefault(); }
+  }
+  function pushHistory(cmd) {
+    if (!cmd.trim()) return;
+    if (history[history.length - 1] !== cmd) {
+      history.push(cmd);
+      if (history.length > 100) history.shift();
+    }
+    hIdx = -1;
+  }
+  function handleArrow(e) {
+    if (e.key === "ArrowUp") {
+      e.preventDefault();
+      if (!history.length) return;
+      if (hIdx === -1) hIdx = history.length - 1;
+      else if (hIdx > 0) hIdx--;
+      input.value = history[hIdx];
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      if (hIdx === -1) return;
+      if (hIdx < history.length - 1) { hIdx++; input.value = history[hIdx]; }
+      else { hIdx = -1; input.value = ""; }
+    }
+  }
+
   input.addEventListener("keydown", (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        const cmd = input.value;
-        pushHistory(cmd);
-        sendCommand(cmd);
+      e.preventDefault();
+      const c = input.value;
+      pushHistory(c);
+      sendCommand(c);
     } else if (e.key === "ArrowUp" || e.key === "ArrowDown") {
-        handleArrow(e);
+      handleArrow(e);
     } else if (e.key === "Tab") {
-        handleTab(e);
+      handleTab(e);
     }
-});
+  });
+  sendBtn.addEventListener("click", () => sendCommand(input.value));
+  micBtn.addEventListener("click", triggerVoice);
 
-  // ============ Boot sequence ============
-  setTimeout(() => {
-    document.getElementById("boot").classList.add("hide");
-  }, 2900);
-  // ============ Command history + tab completion ============
-const commandHistory = [];
-let historyIndex = -1;
-
-const SLASH_COMPLETIONS = [
-    "/w ", "/weather ", "/s ", "/search ", "/n ", "/news ",
-    "/p ", "/play ", "/stop", "/t ", "/translate ", "/wiki ",
-    "/c ", "/calc ", "/note ", "/remind ", "/screen ",
-    "/read", "/error", "/index ", "/ask ", "/clear", "/help",
-];
-
-const WORD_COMPLETIONS = {
-    "wea": "what's the weather in ",
-    "sea": "search for ",
-    "play": "play ",
-    "tran": "translate ",
-    "news": "latest news about ",
-    "note": "take a note: ",
-    "remind": "remind me ",
-    "wiki": "tell me about ",
-    "calc": "what's ",
-    "help": "/help",
-    "clear": "/clear",
-};
-
-function handleTab(e) {
-    const val = input.value;
-    if (!val.startsWith("/")) {
-        const firstWord = val.split(" ")[0].toLowerCase();
-        if (WORD_COMPLETIONS[firstWord] && val.split(" ").length === 1) {
-            input.value = WORD_COMPLETIONS[firstWord];
-            e.preventDefault();
-        }
-        return;
+  /* ============ Shortcuts modal ============ */
+  document.addEventListener("keydown", (e) => {
+    // Only when not focused on input
+    if (e.target.tagName === "INPUT") {
+      if (e.key === "Escape") shortcutsModal.classList.remove("open");
+      return;
     }
-    const matches = SLASH_COMPLETIONS.filter(c => c.startsWith(val));
-    if (matches.length === 1) {
-        input.value = matches[0];
-        e.preventDefault();
-    } else if (matches.length > 1) {
-        console.log("Completions:", matches);
-        e.preventDefault();
+    if (e.key === "?") {
+      e.preventDefault();
+      shortcutsModal.classList.toggle("open");
+    } else if (e.key === "Escape") {
+      shortcutsModal.classList.remove("open");
+    } else if (e.key === "/") {
+      e.preventDefault();
+      input.focus();
+    } else if (e.ctrlKey && e.key.toLowerCase() === "l") {
+      e.preventDefault();
+      sendCommand("/clear");
     }
-}
+  });
+  shortcutsModal.addEventListener("click", (e) => {
+    if (e.target === shortcutsModal) shortcutsModal.classList.remove("open");
+  });
 
-function pushHistory(cmd) {
-    if (!cmd.trim()) return;
-    if (commandHistory[commandHistory.length - 1] !== cmd) {
-        commandHistory.push(cmd);
-        if (commandHistory.length > 100) commandHistory.shift();
-    }
-    historyIndex = -1;
-}
+  input.focus();
 
-function handleArrow(e) {
-    if (e.key === "ArrowUp") {
-        e.preventDefault();
-        if (commandHistory.length === 0) return;
-        if (historyIndex === -1) historyIndex = commandHistory.length - 1;
-        else if (historyIndex > 0) historyIndex--;
-        input.value = commandHistory[historyIndex];
-    } else if (e.key === "ArrowDown") {
-        e.preventDefault();
-        if (historyIndex === -1) return;
-        if (historyIndex < commandHistory.length - 1) {
-            historyIndex++;
-            input.value = commandHistory[historyIndex];
-        } else {
-            historyIndex = -1;
-            input.value = "";
-        }
-    }
-}
+  /* ============ Spin animation ============ */
+  const styleEl = document.createElement("style");
+  styleEl.textContent = `@keyframes spinNoOffset { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`;
+  document.head.appendChild(styleEl);
+
+  /* ============ Boot ============ */
+  setTimeout(() => document.getElementById("boot").classList.add("hide"), 2900);
 </script>
 
 </body>
