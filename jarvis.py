@@ -245,22 +245,23 @@ def _execute_tool_inner(name: str, args: dict) -> str:
 def think_stream(user_text: str):
     """Yield (kind, text) tuples for a user command."""
     # ---- Learned-tool management (/tools, /learned X, /forget-tool X) ----
+        # ---- Learned-tool management (/tools, /learned X, /forget-tool X) ----
     special = slash_commands.handle_special_commands(user_text)
     if special is not None:
-        yield ("content", special)
+        yield ("content", QUIET_PREFIX + special)
         return
 
     # ---- Slash command handling ----
     if slash_commands.is_clear(user_text):
-        yield ("content", "__CLEAR__")
+        yield ("content", QUIET_PREFIX + "__CLEAR__")
         return
 
     if slash_commands.is_help(user_text):
-        yield ("content", slash_commands.get_help())
+        yield ("content", QUIET_PREFIX + slash_commands.get_help())
         return
 
     if slash_commands.is_stop(user_text):
-        yield ("content", _stop_all_music())
+        yield ("content", QUIET_PREFIX + _stop_all_music())
         return
 
     # Expand /shortcut → full command before anything else

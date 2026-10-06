@@ -150,8 +150,7 @@ def handle_special_commands(text: str):
 
     if stripped.lower() == "/ambient":
         import ambient
-        state = "ON" if ambient.is_enabled() else "OFF"
-        return f"Ambient tracking: {state}\n\n{ambient.show_state()}"
+        return ambient.show_summary()
 
     if stripped.lower() == "/ambient-off":
         import ambient

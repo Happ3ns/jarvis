@@ -276,3 +276,33 @@ def show_state() -> str:
         return json.dumps(s, indent=2)
     except Exception as e:
         return f"Error reading state: {e}"
+    
+def show_summary() -> str:
+    """Human-readable one-screen summary."""
+    if not STATE_FILE.exists():
+        return "No ambient state yet."
+    try:
+        s = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        return "Error reading state."
+
+    status = "ON" if _enabled else "OFF"
+    lines = [f"Ambient tracking: {status}", ""]
+    lines.append(f"Active:  {s.get('active_window', '?')}")
+    dur = _format_duration(s.get("active_duration_seconds", 0))
+    lines.append(f"In app:  {dur}")
+    idle = s.get("idle_seconds", 0)
+    lines.append(f"Idle:    {_format_duration(idle)}")
+    lines.append(f"Battery: {s.get('battery_percent', '?')}% "
+                 f"({'plugged' if s.get('battery_plugged') else 'on battery'})")
+    lines.append(f"Time:    {s.get('time', '?')} — {s.get('date', '')}")
+
+    rf = s.get("recent_files", [])
+    if rf:
+        lines.append(f"Recent:  {', '.join(rf[:4])}")
+
+    git = s.get("git_uncommitted", [])
+    for g in git:
+        lines.append(f"Git:     {g['uncommitted']} uncommitted in {g['repo']}/")
+
+    return "\n".join(lines)
