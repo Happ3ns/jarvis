@@ -6,6 +6,7 @@ retries on tool validation errors.
 import ambient
 import json
 import os
+import anticipate
 import tool_stats
 import lessons
 from openai import OpenAI
@@ -273,6 +274,18 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
       'plan'    — the initial PLAN: block
       'status'  — informational like "[Calling get_weather...]"
     """
+
+    # ── Anticipation cache check ──
+    hit, cached = anticipate.get_cached(user_text)
+    if hit:
+        anticipate.log_query(user_text, [])
+        yield ("content", cached)
+        yield ("status", "[⚡ Precomputed]")
+        yield ("done", "")
+        return
+
+    _used_tools = []
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_text},
@@ -287,7 +300,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
         extra = "\n\n".join(t for t in [stats_text, lessons_text] if t)
         messages.append({"role": "system", "content": extra})
 
-            # ---- Inject ambient context ----
+    # ---- Inject ambient context ----
     ambient_text = ambient.context_summary()
     if ambient_text:
         messages.append({"role": "system", "content": ambient_text})
@@ -315,6 +328,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
         try:
             stream = _call_with_fallback(messages, stream=True)
         except Exception as e:
+            anticipate.log_query(user_text, _used_tools)
             yield ("content", f"All models failed: {e}")
             return
 
@@ -372,6 +386,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                             tool_calls_buffer[idx]["arguments"] += tc.function.arguments
 
         if not has_tool_calls:
+            anticipate.log_query(user_text, _used_tools)
             return
 
         messages.append({
@@ -411,9 +426,9 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 continue
 
             # 2. Parse JSON arguments with retry feedback
-        try:
+            try:
                 args = json.loads(tc["arguments"] or "{}")
-        except json.JSONDecodeError as e:
+            except json.JSONDecodeError as e:
                 print(f"[brain] JSON parse failed for {tc['name']}: {e}")
                 messages.append({
                     "role": "tool",
@@ -429,17 +444,22 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 continue
 
             # 3. Execute the tool
-        yield ("status", f"[Calling {tc['name']}...]")
-        try:
+            yield ("status", f"[Calling {tc['name']}...]")
+            try:
                 result = execute_tool_fn(tc["name"], args)
-        except Exception as e:
+            except Exception as e:
                 result = f"Tool error: {e}"
 
+            # Record for the anticipation engine
+            if tc["name"] not in ("create_tool",):
+                _used_tools.append({"name": tc["name"], "args": args})
+
             # 4. Feed the result back to the LLM
-        messages.append({
+            messages.append({
                 "role": "tool",
                 "tool_call_id": tc["id"],
                 "content": str(result),
             })
 
+    anticipate.log_query(user_text, _used_tools)
     yield ("content", "\n[Max steps reached]")

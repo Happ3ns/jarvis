@@ -3,6 +3,8 @@
 import json
 import memory
 import ambient
+import anticipate
+from jarvis import execute_tool
 from flask import Flask, render_template, request, jsonify, Response
 
 from jarvis import think_stream, QUIET_PREFIX
@@ -212,7 +214,9 @@ def command_stream():
             "X-Accel-Buffering": "no",
         },
     )
-
+@app.route("/api/anticipate-stats", methods=["GET"])
+def anticipate_stats():
+    return jsonify(anticipate.stats())
 
 @app.route("/api/voice", methods=["POST"])
 def voice():
@@ -250,6 +254,7 @@ if __name__ == "__main__":
     ambient.start()
     import daemon
     daemon.start()
+    anticipate.start(execute_tool)
     try:
         app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
     finally:
