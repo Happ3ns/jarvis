@@ -95,6 +95,24 @@ def execute_tool(name: str, args: dict) -> str:
 def _execute_tool_inner(name: str, args: dict) -> str:
     """Actual dispatcher — wrapped by execute_tool for stats."""
     try:
+                # Scheduled tasks
+        if name == "schedule_task":
+            import tasks
+            return tasks.add_scheduled(
+                args["name"], args["schedule"], args["action"]
+            )
+        if name == "watch_for":
+            import tasks
+            return tasks.add_watcher(
+                args["name"], args["check_code"], args["action"]
+            )
+        if name == "list_scheduled_tasks":
+            import tasks
+            return tasks.list_tasks()
+        if name == "delete_scheduled_task":
+            import tasks
+            return tasks.delete(int(args["id"]))
+        
                 # Self-extension
         if name == "create_tool":
             return self_extension.create_tool(

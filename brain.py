@@ -120,6 +120,12 @@ SYSTEM_PROMPT = (
     "battery, git status, recent files). Use it when relevant — especially "
     "for questions like 'what should I do', 'am I productive', 'should I "
     "take a break'. Don't mention it unless it's directly useful. "
+
+    "You can schedule tasks using schedule_task. When the user says "
+    "'remind me every X', 'every morning at 8', 'daily at 9pm', or similar, "
+    "use schedule_task with the appropriate schedule format. "
+    "You can set up watchers using watch_for when the user says 'tell me "
+    "when X happens' or 'notify me if Y'. "
 )
 
 

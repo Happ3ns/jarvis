@@ -6,6 +6,8 @@ to full commands before being sent to the LLM, saving typing.
 
 # Mapping of /shortcut → full command prefix
 SLASH_COMMANDS = {
+    "/tasks":     "list scheduled tasks",
+    "/daemon":    "daemon status",
     "/ambient":   "ambient status",
     "/ambient-on": "enable ambient tracking",
     "/ambient-off": "disable ambient tracking",
@@ -48,6 +50,8 @@ SLASH_COMMANDS = {
 
 
 HELP_TEXT = (
+    "/tasks - list scheduled tasks | "
+    "/daemon - daemon status | "
     "/ambient - show context | "
     "/ambient-off - pause tracking | "
     "/ambient-on - resume tracking | "
@@ -147,6 +151,22 @@ def handle_special_commands(text: str):
     import self_extension
 
     stripped = text.strip()
+
+    if stripped.lower() == "/tasks":
+        import tasks
+        return tasks.list_tasks()
+
+    if stripped.lower() == "/daemon":
+        import daemon
+        return daemon.status()
+
+    if stripped.lower() == "/daemon-pause":
+        import daemon
+        return daemon.pause()
+
+    if stripped.lower() == "/daemon-resume":
+        import daemon
+        return daemon.resume()
 
     if stripped.lower() == "/ambient":
         import ambient

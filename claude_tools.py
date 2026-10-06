@@ -4,6 +4,100 @@ TOOLS = [
         {
         "type": "function",
         "function": {
+            "name": "schedule_task",
+            "description": (
+                "Create a recurring or one-shot scheduled task. Use when the "
+                "user says 'remind me every X', 'every morning at 8 do Y', "
+                "'at 3pm today do Z'. The action is a JARVIS command to run "
+                "when the task fires."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Short descriptive name"
+                    },
+                    "schedule": {
+                        "type": "string",
+                        "description": (
+                            "When to run. Formats: 'every 30m', 'every 2h', "
+                            "'daily 08:00', 'at 2026-10-15 14:00'"
+                        )
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": (
+                            "The JARVIS command to execute when the task fires. "
+                            "For example: 'give me a morning briefing' or "
+                            "'check my email'"
+                        )
+                    },
+                },
+                "required": ["name", "schedule", "action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "watch_for",
+            "description": (
+                "Create a watcher task that runs a Python condition check "
+                "periodically. When the condition returns truthy, the action "
+                "is executed. Use when the user says 'tell me when X', "
+                "'watch for Y', 'notify me if Z'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Short descriptive name"
+                    },
+                    "check_code": {
+                        "type": "string",
+                        "description": (
+                            "Python code that prints a truthy value when the "
+                            "condition is met (e.g. prints 'true' or a "
+                            "message). Must not contain subprocess, os.system, "
+                            "socket, or exec."
+                        )
+                    },
+                    "action": {
+                        "type": "string",
+                        "description": "The JARVIS command to execute when triggered"
+                    },
+                },
+                "required": ["name", "check_code", "action"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_scheduled_tasks",
+            "description": "Show all scheduled tasks and watchers",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "delete_scheduled_task",
+            "description": "Delete a scheduled task by its id",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "integer"}
+                },
+                "required": ["id"],
+            },
+        },
+    },
+        {
+        "type": "function",
+        "function": {
             "name": "create_tool",
             "description": (
                 "Create a new tool permanently when NO existing tool can "
