@@ -5,6 +5,9 @@ Run with: python jarvis.py
 from code_runner import run_code, compute, analyze_file
 import browser_control
 import memory
+import time
+import tool_stats
+import lessons
 import self_extension
 import agents
 import slash_commands
@@ -65,7 +68,32 @@ def _stop_all_music() -> str:
 
 
 def execute_tool(name: str, args: dict) -> str:
+    """Route LLM tool calls to the actual Python functions."""
     args = args or {}
+    start = time.time()
+    success = False
+    try:
+        result = _execute_tool_inner(name, args)
+        success = True
+        return result
+    except Exception as e:
+        result = f"Tool error: {e}"
+        return result
+    finally:
+        duration = time.time() - start
+        tool_stats.record(name, success, duration)
+        # If failed, save a lesson automatically
+        if not success:
+            try:
+                context = f"{name}({list(args.keys())})"
+                lesson = f"Tool failed: {str(args)[:100]}"
+                lessons.record_lesson(context, lesson)
+            except Exception:
+                pass
+
+
+def _execute_tool_inner(name: str, args: dict) -> str:
+    """Actual dispatcher — wrapped by execute_tool for stats."""
     try:
                 # Self-extension
         if name == "create_tool":
@@ -156,7 +184,8 @@ def execute_tool(name: str, args: dict) -> str:
 
         # Info
         if name == "get_weather":
-            return get_weather(args.get("city", "Kanpur"))
+            city = args.get("city") or "Kanpur"
+            return get_weather(city)
         if name == "search_web":
             return search_web(args["query"])
         if name == "search_wikipedia":

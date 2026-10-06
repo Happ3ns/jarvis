@@ -443,23 +443,22 @@ TOOLS = [
     },
 
     # ---------- Info ----------
-    {
+        {
         "type": "function",
         "function": {
             "name": "get_weather",
-            "description": "Get current weather for a city. Defaults to Kanpur if no city is given.",
+            "description": "Get current weather for a city. If no city is provided, defaults to Kanpur.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "city": {
-                        "type": "string",
-                        "description": "City name. Optional — defaults to Kanpur.",
+                        "type": ["string", "null"],
+                        "description": "City name. Pass null or omit for Kanpur.",
                     }
                 },
-                "required": [],
             },
         },
-    },
+    },,
     {
         "type": "function",
         "function": {
