@@ -458,7 +458,8 @@ TOOLS = [
                 },
             },
         },
-    },,
+    },
+
     {
         "type": "function",
         "function": {
@@ -727,8 +728,3 @@ if _learned_schemas:
 else:
     print("[claude_tools] No learned tools found")
     
-# ---- Auto-load learned tools and add their schemas ----
-_learned_schemas = self_extension.load_learned_schemas()
-if _learned_schemas:
-    TOOLS.extend(_learned_schemas)
-    print(f"[claude_tools] Loaded {len(_learned_schemas)} learned tool schema(s)")

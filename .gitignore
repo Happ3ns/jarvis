@@ -15,3 +15,7 @@ list_devices.py
 fix_css.py
 *.backup
 tools_learned/
+models/
+test.txt
+tool_stats.json
+lessons.json

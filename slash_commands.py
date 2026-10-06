@@ -6,6 +6,9 @@ to full commands before being sent to the LLM, saving typing.
 
 # Mapping of /shortcut → full command prefix
 SLASH_COMMANDS = {
+    "/stats":     "show tool stats",
+    "/lessons":   "show learned lessons",
+    "/clear-lessons": "clear lessons",
      "/tools":    "list learned tools",
     "/learned":  "show source of learned tool",
     "/forget-tool": "delete learned tool",
@@ -42,6 +45,9 @@ SLASH_COMMANDS = {
 
 
 HELP_TEXT = (
+    "/stats - tool performance | "
+    "/lessons - past mistakes | "
+    "/clear-lessons - reset lessons | "
     "/tools - list learned tools | "
     "/learned [name] - show source | "
     "/forget-tool [name] - delete | "
@@ -135,6 +141,18 @@ def handle_special_commands(text: str):
     import self_extension
 
     stripped = text.strip()
+
+    if stripped.lower() == "/stats":
+        import tool_stats
+        return tool_stats.full_report()
+
+    if stripped.lower() == "/lessons":
+        import lessons
+        return lessons.all_lessons()
+
+    if stripped.lower() == "/clear-lessons":
+        import lessons
+        return lessons.clear_lessons()
 
     if stripped.lower() == "/tools":
         return self_extension.list_learned()

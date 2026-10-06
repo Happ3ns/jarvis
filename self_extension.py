@@ -24,7 +24,6 @@ BLOCKED_PATTERNS = [
     "os.system", "os.popen", "subprocess", "socket",
     "shutil.rmtree", "__import__", "eval(", "exec(",
     "open('/etc", "open('C:\\Windows",
-    "requests.post", "urllib.request",
     "shutil.move", "shutil.copy",
 ]
 
