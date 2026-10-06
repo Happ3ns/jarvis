@@ -6,6 +6,9 @@ to full commands before being sent to the LLM, saving typing.
 
 # Mapping of /shortcut → full command prefix
 SLASH_COMMANDS = {
+    "/ambient":   "ambient status",
+    "/ambient-on": "enable ambient tracking",
+    "/ambient-off": "disable ambient tracking",
     "/stats":     "show tool stats",
     "/lessons":   "show learned lessons",
     "/clear-lessons": "clear lessons",
@@ -45,6 +48,9 @@ SLASH_COMMANDS = {
 
 
 HELP_TEXT = (
+    "/ambient - show context | "
+    "/ambient-off - pause tracking | "
+    "/ambient-on - resume tracking | "
     "/stats - tool performance | "
     "/lessons - past mistakes | "
     "/clear-lessons - reset lessons | "
@@ -141,6 +147,19 @@ def handle_special_commands(text: str):
     import self_extension
 
     stripped = text.strip()
+
+    if stripped.lower() == "/ambient":
+        import ambient
+        state = "ON" if ambient.is_enabled() else "OFF"
+        return f"Ambient tracking: {state}\n\n{ambient.show_state()}"
+
+    if stripped.lower() == "/ambient-off":
+        import ambient
+        return ambient.disable()
+
+    if stripped.lower() == "/ambient-on":
+        import ambient
+        return ambient.enable()
 
     if stripped.lower() == "/stats":
         import tool_stats

@@ -2,6 +2,7 @@
 
 import json
 import memory
+import ambient
 from flask import Flask, render_template, request, jsonify, Response
 
 from jarvis import think_stream, QUIET_PREFIX
@@ -137,4 +138,5 @@ def voice():
 
 if __name__ == "__main__":
     speak("JARVIS online. Type in the browser.")
+    ambient.start()
     app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)

@@ -3,7 +3,7 @@
 Streams responses, detects plans, filters hallucinated tool names,
 retries on tool validation errors.
 """
-
+import ambient
 import json
 import os
 import tool_stats
@@ -115,6 +115,11 @@ SYSTEM_PROMPT = (
     "reasoning steps before your conclusion. Format each as 'Step N: ...'. "
     "Then give a one-sentence recommendation. "
     "For factual questions, skip the reasoning and answer directly. "
+
+    "You have access to the user's current context (active app, idle time, "
+    "battery, git status, recent files). Use it when relevant — especially "
+    "for questions like 'what should I do', 'am I productive', 'should I "
+    "take a break'. Don't mention it unless it's directly useful. "
 )
 
 
@@ -275,6 +280,11 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
     if stats_text or lessons_text:
         extra = "\n\n".join(t for t in [stats_text, lessons_text] if t)
         messages.append({"role": "system", "content": extra})
+
+            # ---- Inject ambient context ----
+    ambient_text = ambient.context_summary()
+    if ambient_text:
+        messages.append({"role": "system", "content": ambient_text})
 
     # ---- Self-critique for complex requests ----
     complex_markers = [
