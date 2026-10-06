@@ -308,19 +308,16 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
 
     plan_state = "detecting"
 
-    # ---- Inject tool stats + lessons into context ----
     stats_text = tool_stats.summary_for_prompt()
     lessons_text = lessons.lessons_for_prompt()
     if stats_text or lessons_text:
         extra = "\n\n".join(t for t in [stats_text, lessons_text] if t)
         messages.append({"role": "system", "content": extra})
 
-    # ---- Inject ambient context ----
     ambient_text = ambient.context_summary()
     if ambient_text:
         messages.append({"role": "system", "content": ambient_text})
 
-    # ---- Self-critique for complex requests ----
     complex_markers = [
         "plan", "research", "compare", "and then", "then save",
         "then email", "then write", "build a tool",
@@ -338,6 +335,16 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 "role": "system",
                 "content": f"Reviewed plan to follow:\n{critique}",
             })
+
+    # Tools whose return value is already a complete user-facing sentence.
+    # For these, we skip the second LLM call and stream the result directly.
+    SELF_REPLYING_TOOLS = {
+        "play_on_spotify", "play_on_youtube", "stop_youtube",
+        "stop_music", "stop_all_music",
+        "open_app", "close_app",
+        "take_note", "set_reminder", "set_timer",
+        "shutdown", "restart", "sleep_system",
+    }
 
     for _ in range(max_steps):
         try:
@@ -371,6 +378,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
         content_buffer = ""
         tool_calls_buffer = {}
         has_tool_calls = False
+        _json_handled = False
 
         for chunk in stream:
             if not chunk.choices:
@@ -395,46 +403,42 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         continue
 
                 if plan_state == "in_plan":
-                    # Exit plan when we see a line that isn't a numbered item
                     after = content_buffer.split("PLAN:", 1)[-1]
                     after = after.split("Plan:", 1)[-1]
                     after = after.split("plan:", 1)[-1]
                     lines = after.split("\n")
-                    
                     exit_plan = False
                     for i, line in enumerate(lines):
                         s = line.strip()
                         if not s:
                             continue
-                        # Numbered/bulleted = still in plan
                         if s[0].isdigit() or s[0] in "-*•":
                             continue
-                        # Non-list line = plan is over
-                        if i > 0:  # at least one plan line already
+                        if i > 0:
                             exit_plan = True
                             break
                     if exit_plan:
                         plan_state = "after_plan"
-                        # Yield current chunk as content (plan already sent)
                         yield ("content", delta.content)
                     else:
                         yield ("plan", delta.content)
                     continue
-                                # Detect raw JSON tool calls leaked as text
-                # Qwen sometimes writes {"name": "...", "parameters": {...}}
-                # instead of using structured tool calls
-                if plan_state == "after_plan" and "{" in delta.content:
+
+                # Qwen workaround: raw JSON tool calls leaked as text
+                if (not _json_handled
+                        and plan_state == "after_plan"
+                        and '{"name"' in content_buffer):
                     import re as _re
-                    # Look for JSON-like object with a name field
                     m = _re.search(
                         r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"'
-                        r'(parameters|arguments)"\s*:\s*(\{.*?\})\s*\}',
+                        r'(?:parameters|arguments)"\s*:\s*(\{.*?\})\s*\}',
                         content_buffer,
                         _re.DOTALL,
                     )
                     if m:
+                        _json_handled = True
                         tool_name = m.group(1)
-                        tool_args_json = m.group(3)
+                        tool_args_json = m.group(2)
                         try:
                             tool_args = json.loads(tool_args_json)
                         except json.JSONDecodeError:
@@ -447,28 +451,17 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         except Exception as e:
                             result = f"Tool error: {e}"
 
-                                    # Tools whose result is already user-ready. Skip the second LLM call.
-                    SELF_REPLYING_TOOLS = {
-                    "play_on_spotify", "play_on_youtube", "stop_youtube",
-                    "stop_music", "stop_all_music",
-                    "open_app", "close_app",
-                    "take_note", "set_reminder", "set_timer",
-                    "shutdown", "restart", "sleep_system",
-                    }
-                    if tc["name"] in SELF_REPLYING_TOOLS:
-                       yield ("content", str(result))
-                       anticipate.log_query(user_text, _used_tools)
-                       yield ("done", "")
-                       return
-                        # Strip the JSON from content and inject the real result
-                    content_buffer = content_buffer[:m.start()]
-                    textSpan_content = (
-                            content_buffer + "\n\n" + str(result)
-                        )
-                    yield ("content", "\n\n" + str(result))
-                        # Reset buffer so we don't re-detect
-                    content_buffer = textSpan_content
-                    continue
+                        content_buffer = content_buffer[:m.start()]
+
+                        if tool_name in SELF_REPLYING_TOOLS:
+                            yield ("content", str(result))
+                            anticipate.log_query(user_text, _used_tools)
+                            yield ("done", "")
+                            return
+
+                        yield ("content", "\n\n" + str(result))
+                        content_buffer += "\n\n" + str(result)
+                        continue
 
                 yield ("content", delta.content)
 
@@ -509,7 +502,6 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
         })
 
         for tc in tool_calls_buffer.values():
-            # Normalize tool name (strips Groq channel suffixes)
             original_name = tc["name"]
             tc["name"] = _normalize_tool_name(tc["name"])
 
@@ -528,7 +520,6 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 })
                 continue
 
-            # 2. Parse JSON arguments with retry feedback
             try:
                 args = json.loads(tc["arguments"] or "{}")
             except json.JSONDecodeError as e:
@@ -546,18 +537,23 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 })
                 continue
 
-            # 3. Execute the tool
             yield ("status", f"[Calling {tc['name']}...]")
             try:
                 result = execute_tool_fn(tc["name"], args)
             except Exception as e:
                 result = f"Tool error: {e}"
 
-            # Record for the anticipation engine
             if tc["name"] not in ("create_tool",):
                 _used_tools.append({"name": tc["name"], "args": args})
 
-            # 4. Feed the result back to the LLM
+            # Self-replying tools: stream the result directly, skip LLM round-trip
+            if (tc["name"] in SELF_REPLYING_TOOLS
+                    and not str(result).startswith("Tool error")):
+                yield ("content", str(result))
+                anticipate.log_query(user_text, _used_tools)
+                yield ("done", "")
+                return
+
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc["id"],
