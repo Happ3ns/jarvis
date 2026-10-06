@@ -6,9 +6,10 @@ retries on tool validation errors.
 
 import json
 import os
-
+import tool_stats
+import lessons
 from openai import OpenAI
-
+import recovery
 from claude_tools import TOOLS
 
 # ---- Groq (primary) ----
@@ -26,8 +27,8 @@ _ollama_client = OpenAI(
 MODELS = [
     (_groq_client, "openai/gpt-oss-120b"),
     (_groq_client, "openai/gpt-oss-20b"),
-    (_groq_client, "qwen/qwen3-32b"),
-    (_ollama_client, "llama3.2:3b"),
+    (_groq_client, "qwen/qwen3.8-27b"),    
+    (_ollama_client, "llama3.2:1b"),
 ]
 
 # Valid tool names — used to reject hallucinated tool calls
@@ -107,13 +108,21 @@ SYSTEM_PROMPT = (
     # ---- Anti-hallucination ----
     "Never make up data — use tools for facts. "
     "Never claim to have done something you didn't do. "
+
+        # ---- Why chain (reasoning steps for judgment questions) ----
+    "When the user asks a question that requires judgment — like which option "
+    "is better, what should I do, or is X worth it — include 3-5 short "
+    "reasoning steps before your conclusion. Format each as 'Step N: ...'. "
+    "Then give a one-sentence recommendation. "
+    "For factual questions, skip the reasoning and answer directly. "
 )
 
 
 def _call_with_fallback(messages, stream: bool = False, _retry: bool = False):
-    """Try each model in order. On tool validation or JSON errors, retry once
-    with a corrective system message and lower temperature."""
+    """Try each model in order. On recoverable errors, retry once with a
+    corrective system message. On unrecoverable errors, move to next model."""
     last_error = None
+
     for client, model in MODELS:
         try:
             return client.chat.completions.create(
@@ -127,38 +136,21 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False):
             )
         except Exception as e:
             err_str = str(e)
-            err_lower = err_str.lower()
+            result = recovery.classify(err_str)
 
-            # Retry once on tool call validation or JSON parse errors
-            needs_retry = (
-                "tool call validation failed" in err_lower
-                or "failed to parse tool call arguments" in err_lower
-            )
+            print(f"[brain] {model} failed ({result['category']}): {err_str[:100]}")
 
-            if needs_retry and not _retry:
-                print(f"[brain] {model}: tool JSON error — retrying with correction")
-                corrected = list(messages)
-                corrected.append({
-                    "role": "system",
-                    "content": (
-                        "Your previous tool call was invalid — the JSON "
-                        "could not be parsed by the API. This usually means "
-                        "the `code` field was too long or had unescaped "
-                        "characters. Retry with:\n"
-                        "1. Shorter code (under 30 lines if possible)\n"
-                        "2. Use single quotes inside the code for strings\n"
-                        "3. Escape all backslashes as \\\\\n"
-                        "4. No triple-quoted strings inside the code"
-                    ),
-                })
-                try:
-                    return _call_with_fallback(corrected, stream=stream, _retry=True)
-                except Exception as retry_err:
-                    print(f"[brain] {model} retry failed: {str(retry_err)[:80]}")
-                    last_error = retry_err
-                    continue
+            if result["should_retry"] and not _retry:
+                corrected = recovery.build_correction(messages, err_str)
+                if corrected is not None:
+                    print(f"[brain] retrying {model} with correction")
+                    try:
+                        return _call_with_fallback(corrected, stream=stream, _retry=True)
+                    except Exception as retry_err:
+                        print(f"[brain] {model} retry failed: {str(retry_err)[:80]}")
+                        last_error = retry_err
+                        continue
 
-            print(f"[brain] {model} failed: {err_str[:100]}")
             last_error = e
             continue
 
@@ -221,6 +213,46 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
 
     return "That request took too many steps."
 
+def _critique_plan(user_text: str, plan: str) -> str:
+    """Ask the LLM to critique a plan and return improved plan text."""
+    try:
+        response = _call_with_fallback(
+            [
+                {"role": "system", "content": (
+                    "You critique task plans. Identify 1-3 concrete weaknesses "
+                    "or missing steps. Then output the IMPROVED plan with the "
+                    "same PLAN: format. Be brief."
+                )},
+                {"role": "user", "content": (
+                    f"User request: {user_text}\n\n"
+                    f"Draft plan:\n{plan}\n\n"
+                    "What's missing or wrong? Then give the improved plan."
+                )},
+            ],
+            stream=False,
+        )
+        return response.choices[0].message.content or plan
+    except Exception as e:
+        print(f"[brain] critique failed: {e}")
+        return plan
+
+def _quick_plan(user_text: str) -> str:
+    """Get a fast non-streaming draft plan for critique."""
+    try:
+        response = _call_with_fallback(
+            [
+                {"role": "system", "content": (
+                    "Write a short numbered plan (3-6 items) for this task. "
+                    "Start with 'PLAN:' and keep it under 60 words."
+                )},
+                {"role": "user", "content": user_text},
+            ],
+            stream=False,
+        )
+        return response.choices[0].message.content or ""
+    except Exception as e:
+        print(f"[brain] quick_plan failed: {e}")
+        return ""
 
 def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
     """Streaming version. Yields (kind, text) tuples.
@@ -236,6 +268,32 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
     ]
 
     plan_state = "detecting"
+
+    # ---- Inject tool stats + lessons into context ----
+    stats_text = tool_stats.summary_for_prompt()
+    lessons_text = lessons.lessons_for_prompt()
+    if stats_text or lessons_text:
+        extra = "\n\n".join(t for t in [stats_text, lessons_text] if t)
+        messages.append({"role": "system", "content": extra})
+
+    # ---- Self-critique for complex requests ----
+    complex_markers = [
+        "plan", "research", "compare", "and then", "then save",
+        "then email", "then write", "build a tool",
+    ]
+    is_complex = (
+        len(user_text) > 120
+        or any(m in user_text.lower() for m in complex_markers)
+    )
+    if is_complex:
+        print("[brain] Complex request detected — running self-critique")
+        draft = _quick_plan(user_text)
+        if draft:
+            critique = _critique_plan(user_text, draft)
+            messages.append({
+                "role": "system",
+                "content": f"Reviewed plan to follow:\n{critique}",
+            })
 
     for _ in range(max_steps):
         try:
