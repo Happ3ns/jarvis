@@ -1,10 +1,11 @@
 """LLM brain for JARVIS — Groq with Ollama fallback.
 
 Streams responses, detects plans, filters hallucinated tool names,
-retries on tool validation errors.
+retries on tool validation errors. Uses smart tool router to save tokens.
 """
 import ambient
 import json
+import tool_router
 import os
 import anticipate
 import tool_stats
@@ -37,129 +38,124 @@ VALID_TOOL_NAMES = {t["function"]["name"] for t in TOOLS}
 
 import re as _re
 
+
 def _normalize_tool_name(name: str) -> str:
     """Strip Groq-specific channel suffixes like '.channel' or 'commentary'."""
     if not name:
         return name
-    # Strip everything from the first '<' or '.' or '|'
     cleaned = _re.split(r"[<.|]", name)[0].strip()
     return cleaned or name
 
+
 SYSTEM_PROMPT = (
-    "You are JARVIS, an autonomous agent that accomplishes complex goals "
-    "by chaining tools together. "
-    "For 'check if X is a website' or 'check about X' or 'look up X' "
-    "or 'is X a site' — use search_web or open_url with the domain. "
-    "NEVER use open_app for websites. open_app is ONLY for local "
-    "apps like Spotify, Chrome, VS Code, Notepad. "
+    "You are JARVIS, an autonomous agent. Chain tools to complete goals. "
 
-    "When the user asks about universities, admissions, SAT scores, "
-    "or academic programs, search the web and share what you find. "
-    "It's fine to give the user the information and let them draw "
-    "their own conclusions. Don't refuse — the user wants information, "
-    "not a formal guarantee. "
-
-
-    "When the user says 'play X on spotify' or 'spotify X', ALWAYS use "
-    "play_on_spotify. NEVER use open_app for Spotify. open_app is only "
-    "for opening the app when the user just says 'open spotify'. "
-
-    # ---- Tool name rules (fix for Groq channel suffixes) ----
-    "CRITICAL: You may ONLY call tools that appear in the tools list. "
-    "Do NOT invent tool names. Do NOT append suffixes like '.channel' or "
-    "'commentary' to tool names. If a tool is 'run_code', call it as "
-    "'run_code' — never 'run_code.channel' or 'run_code.commentary'. "
-    "Use exact tool names. The weather tool is 'get_weather' "
-    "(not search_weather). The web search tool is 'search_web' "
-    "(not web_search). "
+    # ---- Tool name discipline ----
+    "ONLY call tools that appear in the tools list. Never invent names. "
+    "Never append suffixes like '.channel', 'commentary', or "
+    "'<|channel|>commentary'. Use 'open_app', not 'open_app.channel'. "
+    "The weather tool is 'get_weather' (not search_weather). "
+    "The search tool is 'search_web' (not web_search). "
 
     # ---- Tool selection ----
-    "Choose the MOST SPECIFIC tool for each task. "
-    "For CSV or JSON analysis: use analyze_file. "
-    "For word frequency in text files: use the learned 'top_words' tool "
-    "if available, otherwise use run_code. "
-    "For merging CSVs in a folder: use 'merge_csv_folder' if available. "
-    "For general math or data computation: use compute or run_code. "
+    "Choose the most specific tool. "
+    "For CSV/JSON analysis: analyze_file. "
+    "For word frequency: learned 'top_words' if present, else run_code. "
+    "For merging CSVs in a folder: 'merge_csv_folder' if present. "
+    "For math/data: compute or run_code. "
+    "For websites ('check if X', 'check about X', 'look up X', 'is X a site'): "
+    "search_web or open_url with the domain. "
+    "NEVER use open_app for websites — open_app is for local apps only "
+    "(Spotify, Chrome, VS Code, Notepad). "
+    "For 'open X in vscode' or 'open file X' or 'edit X': open_file_in_editor. "
+    "For music: play_on_youtube by default; play_on_spotify only if user says "
+    "'on spotify' or 'spotify X'. To stop music: stop_youtube. "
+    "For screen requests: analyze_screen or read_screen_text. "
+    "For browser tasks: open_url, search_google, search_youtube, get_page_text, "
+    "click_element, type_into, run_browser_code. "
+    "For user's own files: ask_documents (after index_folder). "
+    "For parallel research: spawn_agents. "
+    "For experiments ('investigate', 'test whether', 'find out why', "
+    "'run an experiment on', 'compare X and Y empirically'): use "
+    "run_experiment. Actually run it — do not just search the web. "
+    "For past experiments: list_experiments. For one: show_experiment with ID. "
 
-        # ---- Planning ----
-    "For genuinely multi-step tasks (3+ tool calls), you may start "
-    "with a short 'PLAN:' block — max 3 short lines, each ending with "
-    "a newline. Follow with a blank line. Do NOT write 'PLAN' before "
-    "simple single-tool responses. NEVER write tool call JSON as plain "
-    "text — either use the structured tool_calls mechanism, or just "
-    "answer directly. "
-    "After the plan, execute each step using tools, one after the "
-    "other. Finally, give a 1-2 sentence summary of the result. "
-    "For simple questions, answer directly without a plan. "
-    "You have up to 25 tool calls per request. "
-    "If a tool fails, adapt and try a different approach. "
+    # ---- Universities/admissions ----
+    "For university, admissions, SAT, or academic program questions: search "
+    "the web and share what you find. Give the user information, not a formal "
+    "guarantee. Do not refuse. "
+
+    # ---- Planning ----
+    "For 3+ tool-call tasks, start with 'PLAN:' followed by max 3 short lines, "
+    "each ending with a newline, then a blank line. Skip PLAN for simple "
+    "single-tool tasks. NEVER write tool-call JSON as plain text — use the "
+    "structured tool_calls mechanism, or answer directly. "
+    "Execute the steps one after another, then give a 1-2 sentence summary. "
+    "Max 25 tool calls per request. If a tool fails, try a different approach. "
 
     # ---- Self-extension ----
-    "If the user asks for something NO existing tool can do, use create_tool "
-    "to write and save a new tool. Write SHORT code (under 30 lines if "
-    "possible). Use single quotes for strings inside the code. Avoid "
-    "triple-quoted strings and regex with many escapes. Include a small "
-    "test_code that exercises the function. "
+    "If no existing tool fits, use create_tool. Short code (under 30 lines), "
+    "single quotes for strings, avoid triple-quotes and heavy regex escapes. "
+    "Include a small test_code. "
+    "After create_tool succeeds, STOP. Do not call the new tool in the same "
+    "response — it becomes available next turn. Just tell the user it was created. "
 
     # ---- Response style ----
-    "Keep individual replies to 1-2 sentences unless the user asks for "
-    "detail. Be concise. "
-
-    # ---- Specific tool guidance ----
-    "For music, ALWAYS use play_on_youtube by default. Only use "
-    "play_on_spotify if the user explicitly says 'on spotify'. "
-    "To stop music, call stop_youtube. "
-    "For screen-related requests, use analyze_screen or read_screen_text. "
-    "For browser tasks (searching sites, clicking, scraping), use the "
-    "browser tools: open_url, search_google, search_youtube, get_page_text, "
-    "click_element, type_into, run_browser_code. "
-    "For code or data analysis, use run_code, compute, or analyze_file. "
-    "For questions about the user's own files, use ask_documents (after "
-    "the user has indexed a folder with index_folder). "
-    "For multi-part research that can be parallelized, use spawn_agents. "
-    "For complex multi-step goals, plan first, then execute. "
+    "1-2 sentences unless the user asks for detail. Be concise. "
+    "For judgment questions ('which is better', 'what should I do', 'is X "
+    "worth it'): give 3-5 short 'Step N: ...' reasoning steps, then a "
+    "one-sentence recommendation. For facts, skip the reasoning. "
 
     # ---- Memory ----
-    "When the user says 'remember X' or 'note that X', call remember_fact. "
-    "When the user asks 'what do you know about me', call recall_facts. "
-    "When the user asks about past conversations, use "
-    "search_past_conversations or get_conversations_on. "
+    "'remember X' or 'note that X' → remember_fact. "
+    "'what do you know about me' → recall_facts. "
+    "Past conversations → search_past_conversations or get_conversations_on. "
+
+    # ---- Context ----
+    "You may receive ambient context (active app, idle, battery, git, recent "
+    "files). Use it for 'what should I do', 'am I productive', 'should I "
+    "take a break'. Do not mention it unless directly useful. "
+
+    # ---- Scheduling ----
+    "'remind me every X', 'every morning at 8', 'daily at 9pm' → schedule_task. "
+    "'tell me when X happens', 'notify me if Y' → watch_for. "
 
     # ---- Anti-hallucination ----
-    "Never make up data — use tools for facts. "
-    "Never claim to have done something you didn't do. "
+    "Never make up data — use tools. Never claim to have done something you did not do. "
 
-        # ---- Why chain (reasoning steps for judgment questions) ----
-    "When the user asks a question that requires judgment — like which option "
-    "is better, what should I do, or is X worth it — include 3-5 short "
-    "reasoning steps before your conclusion. Format each as 'Step N: ...'. "
-    "Then give a one-sentence recommendation. "
-    "For factual questions, skip the reasoning and answer directly. "
-
-    "You have access to the user's current context (active app, idle time, "
-    "battery, git status, recent files). Use it when relevant — especially "
-    "for questions like 'what should I do', 'am I productive', 'should I "
-    "take a break'. Don't mention it unless it's directly useful. "
-
-    "You can schedule tasks using schedule_task. When the user says "
-    "'remind me every X', 'every morning at 8', 'daily at 9pm', or similar, "
-    "use schedule_task with the appropriate schedule format. "
-    "You can set up watchers using watch_for when the user says 'tell me "
-    "when X happens' or 'notify me if Y'. "
+    "If you need a tool that is not in your current list, call "
+    "load_all_tools. It will expand the available tools next turn. "
 )
 
 
-def _call_with_fallback(messages, stream: bool = False, _retry: bool = False):
-    """Try each model in order. On recoverable errors, retry once with a
-    corrective system message. On unrecoverable errors, move to next model."""
+def _call_with_fallback(messages, stream: bool = False, _retry: bool = False,
+                        use_all_tools: bool = False):
+    """Try each model in order. On recoverable errors, retry once.
+
+    Router-miss recovery: if the LLM tries to call a tool that wasn't in
+    the sent subset, retry the SAME model with just that one tool added.
+    Costs ~100 extra tokens, not ~4,000.
+    """
     last_error = None
+
+    # Pick tools based on the latest user message
+    user_msg = ""
+    for m in reversed(messages):
+        if m.get("role") == "user":
+            user_msg = m.get("content", "")
+            break
+
+    if use_all_tools:
+        active_tools = TOOLS
+    else:
+        active_tools, _ = tool_router.pick_tools(user_msg, TOOLS)
 
     for client, model in MODELS:
         try:
             return client.chat.completions.create(
                 model=model,
                 messages=messages,
-                tools=TOOLS,
+                tools=active_tools,
                 tool_choice="auto",
                 max_tokens=4096,
                 temperature=0.05 if _retry else 0.3,
@@ -167,8 +163,63 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False):
             )
         except Exception as e:
             err_str = str(e)
-            result = recovery.classify(err_str)
 
+            # ── Router-miss recovery ──
+            # The LLM tried to call a tool not in the sent subset. Add just
+            # that tool and retry the same model. Cheap, bounded, no loops.
+            is_router_miss = (
+                "not in request.tools" in err_str
+                or "tool call validation" in err_str
+                or "attempted to call tool" in err_str
+            )
+            if is_router_miss and not use_all_tools:
+                import re as _re2
+                m = _re2.search(r"attempted to call tool '([^']+)'", err_str)
+                missing_name = m.group(1) if m else None
+
+                if missing_name:
+                    print(f"[brain] router miss: '{missing_name}' — "
+                          f"retrying {model} with that tool added")
+                    extra = [t for t in TOOLS
+                             if t["function"]["name"] == missing_name]
+                    if extra:
+                        # Only add if not already in the subset
+                        existing_names = {t["function"]["name"]
+                                          for t in active_tools}
+                        if missing_name not in existing_names:
+                            new_tools = list(active_tools) + extra
+                        else:
+                            new_tools = active_tools
+                        try:
+                            return client.chat.completions.create(
+                                model=model,
+                                messages=messages,
+                                tools=new_tools,
+                                tool_choice="auto",
+                                max_tokens=4096,
+                                temperature=0.05 if _retry else 0.3,
+                                stream=stream,
+                            )
+                        except Exception as retry_err:
+                            print(f"[brain] miss-retry on {model} failed: "
+                                  f"{str(retry_err)[:80]}")
+                            last_error = retry_err
+                            continue  # next model
+
+                # Could not parse the tool name — fall back to full tool set
+                print(f"[brain] router miss (no tool name) — trying full set")
+                try:
+                    return _call_with_fallback(
+                        messages, stream=stream, _retry=True,
+                        use_all_tools=True,
+                    )
+                except Exception as retry_err:
+                    print(f"[brain] full-set retry failed: {str(retry_err)[:80]}")
+                    last_error = retry_err
+                    continue  # next model
+
+            # ── Standard recovery path ──
+            result = recovery.classify(err_str)
             print(f"[brain] {model} failed ({result['category']}): {err_str[:100]}")
 
             if result["should_retry"] and not _retry:
@@ -176,7 +227,10 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False):
                 if corrected is not None:
                     print(f"[brain] retrying {model} with correction")
                     try:
-                        return _call_with_fallback(corrected, stream=stream, _retry=True)
+                        return _call_with_fallback(
+                            corrected, stream=stream, _retry=True,
+                            use_all_tools=use_all_tools,
+                        )
                     except Exception as retry_err:
                         print(f"[brain] {model} retry failed: {str(retry_err)[:80]}")
                         last_error = retry_err
@@ -194,6 +248,8 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": user_text},
     ]
+
+    _recent_calls = []
 
     for _ in range(max_steps):
         try:
@@ -231,6 +287,23 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
                 })
                 continue
 
+            # Loop protection — blocks 3rd identical call
+            call_sig = (tc.function.name, tc.function.arguments)
+            if _recent_calls.count(call_sig) >= 2:
+                print(f"[brain] loop detected: {tc.function.name} called with same args")
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": (
+                        f"Error: {tc.function.name} was already called twice with "
+                        f"these exact arguments. Do not repeat. Try a different "
+                        f"tool, or tell the user the task cannot be completed "
+                        f"with current tools."
+                    ),
+                })
+                continue
+            _recent_calls.append(call_sig)
+
             try:
                 args = json.loads(tc.function.arguments or "{}")
             except json.JSONDecodeError:
@@ -243,6 +316,7 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
             })
 
     return "That request took too many steps."
+
 
 def _critique_plan(user_text: str, plan: str) -> str:
     """Ask the LLM to critique a plan and return improved plan text."""
@@ -267,6 +341,7 @@ def _critique_plan(user_text: str, plan: str) -> str:
         print(f"[brain] critique failed: {e}")
         return plan
 
+
 def _quick_plan(user_text: str) -> str:
     """Get a fast non-streaming draft plan for critique."""
     try:
@@ -284,6 +359,7 @@ def _quick_plan(user_text: str) -> str:
     except Exception as e:
         print(f"[brain] quick_plan failed: {e}")
         return ""
+
 
 def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
     """Streaming version. Yields (kind, text) tuples.
@@ -304,6 +380,8 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
         return
 
     _used_tools = []
+    _recent_calls = []
+    _force_all_tools = False
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -312,16 +390,30 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
 
     plan_state = "detecting"
 
-    stats_text = tool_stats.summary_for_prompt()
-    lessons_text = lessons.lessons_for_prompt()
-    if stats_text or lessons_text:
-        extra = "\n\n".join(t for t in [stats_text, lessons_text] if t)
-        messages.append({"role": "system", "content": extra})
+    # ── Conditional context injection ──
+    lower = user_text.lower()
 
-    ambient_text = ambient.context_summary()
-    if ambient_text:
-        messages.append({"role": "system", "content": ambient_text})
+    needs_ambient = any(k in lower for k in (
+        "what should i", "am i productive", "should i take", "break",
+        "on my screen", "current", "right now", "recent",
+        "what am i", "what's on my",
+    ))
+    if needs_ambient:
+        ambient_text = ambient.context_summary()
+        if ambient_text:
+            messages.append({"role": "system", "content": ambient_text})
 
+    needs_stats = any(k in lower for k in (
+        "tool", "failed", "error", "why doesn't", "broken", "what can you do",
+    ))
+    if needs_stats:
+        stats_text = tool_stats.summary_for_prompt()
+        lessons_text = lessons.lessons_for_prompt()
+        if stats_text or lessons_text:
+            extra = "\n\n".join(t for t in [stats_text, lessons_text] if t)
+            messages.append({"role": "system", "content": extra})
+
+    # ── Self-critique for complex requests ──
     complex_markers = [
         "plan", "research", "compare", "and then", "then save",
         "then email", "then write", "build a tool",
@@ -340,19 +432,19 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 "content": f"Reviewed plan to follow:\n{critique}",
             })
 
-    # Tools whose return value is already a complete user-facing sentence.
-    # For these, we skip the second LLM call and stream the result directly.
+    # ── Self-replying tools ──
     SELF_REPLYING_TOOLS = {
         "play_on_spotify", "play_on_youtube", "stop_youtube",
         "stop_music", "stop_all_music",
-        "open_app", "close_app",
+        "open_app", "close_app", "open_file_in_editor",
         "take_note", "set_reminder", "set_timer",
         "shutdown", "restart", "sleep_system",
     }
 
     for _ in range(max_steps):
         try:
-            stream = _call_with_fallback(messages, stream=True)
+            stream = _call_with_fallback(messages, stream=True,
+                                          use_all_tools=_force_all_tools)
         except Exception as e:
             err = str(e).lower()
             if "not in request.tools" in err or "tool call validation" in err:
@@ -369,7 +461,8 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                     ),
                 })
                 try:
-                    stream = _call_with_fallback(messages, stream=True)
+                    stream = _call_with_fallback(messages, stream=True,
+                                                  use_all_tools=_force_all_tools)
                 except Exception as e2:
                     anticipate.log_query(user_text, _used_tools)
                     yield ("content", f"Retry failed: {e2}")
@@ -428,7 +521,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         yield ("plan", delta.content)
                     continue
 
-                # Qwen workaround: raw JSON tool calls leaked as text
+                # ── Qwen raw-JSON tool call workaround ──
                 if (not _json_handled
                         and plan_state == "after_plan"
                         and '{"name"' in content_buffer):
@@ -448,6 +541,24 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         except json.JSONDecodeError:
                             tool_args = {}
                         print(f"[brain] detected raw JSON tool call: {tool_name}")
+
+                        # Loop protection
+                        call_sig = (tool_name, json.dumps(tool_args, sort_keys=True))
+                        if _recent_calls.count(call_sig) >= 2:
+                            print(f"[brain] loop detected (json path): {tool_name}")
+                            messages.append({
+                                "role": "system",
+                                "content": (
+                                    f"Error: {tool_name} was already called "
+                                    f"twice with these arguments. Do not "
+                                    f"repeat. Try a different approach or "
+                                    f"tell the user it cannot be completed."
+                                ),
+                            })
+                            content_buffer = content_buffer[:m.start()]
+                            continue
+                        _recent_calls.append(call_sig)
+
                         yield ("status", f"[Calling {tool_name}...]")
                         try:
                             result = execute_tool_fn(tool_name, tool_args)
@@ -512,6 +623,20 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
             if original_name != tc["name"]:
                 print(f"[brain] normalized tool name: '{original_name}' -> '{tc['name']}'")
 
+            # ── Router meta-tool: expand to full tool set ──
+            if tc["name"] == "load_all_tools":
+                print("[brain] load_all_tools called — expanding tool set")
+                _force_all_tools = True
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": (
+                        "Full tool set loaded. On your next turn you have "
+                        "access to all tools."
+                    ),
+                })
+                continue
+
             if tc["name"] not in VALID_TOOL_NAMES:
                 print(f"[brain] rejected hallucinated tool: {tc['name']}")
                 messages.append({
@@ -523,6 +648,23 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                     ),
                 })
                 continue
+
+            # ── Loop protection — blocks 3rd identical call ──
+            call_sig = (tc["name"], tc["arguments"])
+            if _recent_calls.count(call_sig) >= 2:
+                print(f"[brain] loop detected: {tc['name']} called with same args")
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": (
+                        f"Error: {tc['name']} was already called twice with "
+                        f"these exact arguments. Do not repeat it. Try a "
+                        f"different tool, or tell the user the task cannot "
+                        f"be completed with current tools."
+                    ),
+                })
+                continue
+            _recent_calls.append(call_sig)
 
             try:
                 args = json.loads(tc["arguments"] or "{}")
@@ -550,7 +692,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
             if tc["name"] not in ("create_tool",):
                 _used_tools.append({"name": tc["name"], "args": args})
 
-            # Self-replying tools: stream the result directly, skip LLM round-trip
+            # Self-replying tools: stream result directly, skip LLM round-trip
             if (tc["name"] in SELF_REPLYING_TOOLS
                     and not str(result).startswith("Tool error")):
                 yield ("content", str(result))

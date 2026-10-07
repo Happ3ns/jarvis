@@ -8,8 +8,12 @@ can call run_browser_code with raw Playwright code.
 """
 
 import textwrap
+from pathlib import Path
 from playwright.sync_api import sync_playwright, TimeoutError as PWTimeout
 
+# Persistent Chrome profile — keeps logins/cookies across sessions.
+PROFILE_DIR = Path(__file__).parent / ".browser_profile"
+PROFILE_DIR.mkdir(exist_ok=True)
 # Shared browser state
 _playwright = None
 _browser = None

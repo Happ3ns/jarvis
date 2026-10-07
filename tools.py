@@ -87,20 +87,72 @@ def open_app(app_name: str) -> str:
         "vscode":     os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe"),
     }
     name = app_name.lower().strip()
+
+    matched = None
     if name in apps:
-        try:
-            subprocess.Popen(apps[name])
-            return f"Opening {app_name}."
-        except FileNotFoundError:
-            return f"Found '{app_name}', but the executable isn't at the expected path."
-    for key in apps:
-        if key in name:
+        matched = name
+    else:
+        for key in apps:
+            if key in name:
+                matched = key
+                break
+
+    if not matched:
+        return f"Unknown app '{app_name}'. Supported: {', '.join(sorted(apps))}."
+
+    path = apps[matched]
+    # For full paths, verify existence before launching
+    if os.sep in path or ":" in path:
+        if not os.path.exists(path):
+            return f"'{matched}' is not installed at the expected path ({path})."
+
+    try:
+        subprocess.Popen(path, shell=True)
+        return f"Opened {matched}."
+    except Exception as e:
+        return f"Failed to open {matched}: {e}"
+
+def open_file_in_editor(path: str, line: int = None) -> str:
+    """Open a file in VS Code (or default editor) at an optional line."""
+    from pathlib import Path
+
+    p = Path(path)
+    if not p.is_absolute():
+        # Try relative to the jarvis folder
+        here = Path(__file__).parent
+        if (here / path).exists():
+            p = here / path
+        elif (here / "tools_learned" / path).exists():
+            p = here / "tools_learned" / path
+        else:
+            p = Path.cwd() / path
+
+    if not p.exists():
+        return f"File not found: {path}"
+
+    # Try VS Code CLI first
+    vscode_paths = [
+        os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe"),
+        r"C:\Program Files\Microsoft VS Code\Code.exe",
+        r"C:\Program Files (x86)\Microsoft VS Code\Code.exe",
+    ]
+    for vscode in vscode_paths:
+        if os.path.exists(vscode):
             try:
-                subprocess.Popen(apps[key])
-                return f"Opening {key}."
-            except FileNotFoundError:
-                return f"Found '{key}', but the executable isn't at the expected path."
-    return f"I don't know how to open {app_name} yet."
+                if line:
+                    subprocess.Popen([vscode, "-g", f"{p}:{line}"])
+                else:
+                    subprocess.Popen([vscode, str(p)])
+                return f"Opened {p.name} in VS Code."
+            except Exception as e:
+                return f"Found VS Code but launch failed: {e}"
+
+    # Fall back to default editor
+    try:
+        os.startfile(str(p))
+        return f"Opened {p.name} in default editor."
+    except Exception as e:
+        return f"Couldn't open {p.name}: {e}"
 
 
 def open_website(site: str) -> str:
@@ -328,7 +380,34 @@ def calculate(expression: str) -> str:
     except Exception:
         return "I couldn't parse that math."
 
+def open_file_in_editor(path: str, line: int = None) -> str:
+    """Open a file in VS Code (or default editor) at an optional line."""
+    import subprocess
+    import os
+    from pathlib import Path
 
+    p = Path(path)
+    if not p.exists():
+        # Try to find it in the jarvis folder
+        candidate = Path(__file__).parent / path
+        if candidate.exists():
+            p = candidate
+        else:
+            return f"File not found: {path}"
+
+    try:
+        if line:
+            subprocess.Popen(["code", "-g", f"{p}:{line}"])
+        else:
+            subprocess.Popen(["code", str(p)])
+        return f"Opened {p.name} in VS Code."
+    except FileNotFoundError:
+        # VS Code CLI not on PATH — fall back to os.startfile
+        try:
+            os.startfile(str(p))
+            return f"Opened {p.name} in default editor."
+        except Exception as e:
+            return f"Couldn't open {p.name}: {e}"
 # ---------- Utilities ----------
 
 _timers = []

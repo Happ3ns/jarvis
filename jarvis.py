@@ -95,6 +95,15 @@ def execute_tool(name: str, args: dict) -> str:
 def _execute_tool_inner(name: str, args: dict) -> str:
     """Actual dispatcher — wrapped by execute_tool for stats."""
     try:
+        if name == "run_experiment":
+            import experiment
+            return experiment.experiment_run(args["question"])
+        if name == "list_experiments":
+            import experiment
+            return experiment.experiment_list()
+        if name == "show_experiment":
+            import experiment
+            return experiment.experiment_show(args["experiment_id"])
                 # Scheduled tasks
         if name == "schedule_task":
             import tasks
@@ -122,6 +131,15 @@ def _execute_tool_inner(name: str, args: dict) -> str:
                 parameters=args["parameters"],
                 test_code=args["test_code"],
             )
+        if name == "run_experiment":
+            import experiment
+            return experiment.experiment_run(args["question"])
+        if name == "list_experiments":
+            import experiment
+            return experiment.experiment_list()
+        if name == "show_experiment":
+           import experiment
+           return experiment.experiment_show(args["experiment_id"])
 
         # Dispatch to learned tools
         learned = self_extension.load_learned_tools()
@@ -226,6 +244,8 @@ def _execute_tool_inner(name: str, args: dict) -> str:
             return open_app(args["app_name"])
         if name == "open_website":
             return open_website(args["site"])
+        if name == "open_file_in_editor":
+            return open_file_in_editor(args["path"], args.get("line"))
 
         # Productivity
         if name == "take_screenshot":

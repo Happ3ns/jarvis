@@ -214,6 +214,19 @@ def command_stream():
             "X-Accel-Buffering": "no",
         },
     )
+@app.route("/api/experiments", methods=["GET"])
+def api_experiments():
+    import experiment
+    return jsonify({"experiments": experiment.list_experiments(20)})
+
+
+@app.route("/api/experiments/<exp_id>", methods=["GET"])
+def api_experiment_detail(exp_id):
+    import experiment
+    e = experiment.get_experiment(exp_id)
+    if not e:
+        return jsonify({"error": "not found"}), 404
+    return jsonify(e)
 @app.route("/api/anticipate-stats", methods=["GET"])
 def anticipate_stats():
     return jsonify(anticipate.stats())

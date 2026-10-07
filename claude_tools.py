@@ -811,6 +811,78 @@ TOOLS = [
             },
         },
     },
+        {
+        "type": "function",
+        "function": {
+            "name": "run_experiment",
+            "description": (
+                "Run a full scientific experiment to test a claim empirically. "
+                "Use when the user says 'investigate', 'test whether', 'find out "
+                "why', 'run an experiment on', or 'compare X and Y empirically'. "
+                "This actually executes code, measures results, and produces "
+                "evidence — it does not just search the web. Artifacts are saved "
+                "to experiments/<id>/."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "The research question in one clear sentence."
+                    }
+                },
+                "required": ["question"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_experiments",
+            "description": "Show past experiments the user has run.",
+            "parameters": {"type": "object", "properties": {}},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "show_experiment",
+            "description": "Show details of a specific past experiment by its ID (e.g. EXP-A1B2C3).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "experiment_id": {"type": "string"}
+                },
+                "required": ["experiment_id"],
+            },
+        },
+    },
+        {
+        "type": "function",
+        "function": {
+            "name": "open_file_in_editor",
+            "description": (
+                "Open a file in VS Code. Use when the user says 'open X in "
+                "vscode', 'edit X', 'show me X in the editor', 'open the "
+                "file X'. Works for any file path — relative to the jarvis "
+                "folder or absolute. Optionally jump to a specific line."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "File path, e.g. 'browser_control.py' or full path"
+                    },
+                    "line": {
+                        "type": "integer",
+                        "description": "Optional line number to jump to"
+                    },
+                },
+                "required": ["path"],
+            },
+        },
+    },
 ]
 # ---- Auto-load learned tools and add their schemas ----
 _learned_schemas = self_extension.load_learned_schemas()

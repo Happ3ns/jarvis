@@ -20,3 +20,9 @@ test.txt
 tool_stats.json
 lessons.json
 ambient_state.json
+.browser_profile/
+anticipate.db
+experiments.db
+experiments/
+tasks.db
+memory.db
