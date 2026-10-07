@@ -145,10 +145,7 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False,
             user_msg = m.get("content", "")
             break
 
-    if use_all_tools:
-        active_tools = TOOLS
-    else:
-        active_tools, _ = tool_router.pick_tools(user_msg, TOOLS)
+    active_tools = TOOLS
 
     for client, model in MODELS:
         try:
