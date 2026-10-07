@@ -2,6 +2,8 @@
 
 Streams responses, detects plans, filters hallucinated tool names,
 retries on tool validation errors. Detects narrated/looping tool calls.
+Reloads TOOLS list when create_tool succeeds so new tools are usable
+without restarting JARVIS.
 """
 import ambient
 import json
@@ -27,15 +29,13 @@ _ollama_client = OpenAI(
     api_key="ollama",
 )
 
-# NOTE: gpt-oss models are far better at structured tool calls than
-# llama3.2:1b. Keep them first for reliability. Swap order if you want
-# to run on Ollama-first for free testing (but expect tool creation to
-# fail on the 1B model).
+# gpt-oss models handle structured tool calls far better than the
+# 1B Ollama model. Keep them first for reliability.
 MODELS = [
     (_groq_client, "openai/gpt-oss-120b"),
     (_groq_client, "openai/gpt-oss-20b"),
     (_groq_client, "qwen/qwen3.8-27b"),
-    (_ollama_client, "llama3.2:1b"),
+    (_ollama_client, "qwen2.5:3b"),
 ]
 
 # Valid tool names — used to reject hallucinated tool calls
@@ -149,7 +149,7 @@ SYSTEM_PROMPT = (
 
 
 # ───────────────────────────────────────────────────────────
-# Narration detection helper (used by ask_stream)
+# Narration + loop detection helpers
 # ───────────────────────────────────────────────────────────
 
 _NARRATION_PHRASES = [
@@ -162,10 +162,6 @@ _NARRATION_PHRASES = [
     "call create_tool with",
     "call run_code with",
     "call open_url with",
-    "call text_stats with",
-    "call summarize_text with",
-    "call gen_password with",
-    "call file_hash with",
     "i will call ",
     "i will create a tool",
     "i'll call ",
@@ -186,7 +182,7 @@ def _looks_narrated(text: str) -> bool:
     if any(p in buf_lower for p in _NARRATION_PHRASES):
         return True
 
-    # Repetition check: any single line appearing 3+ times → loop
+    # Repetition: any single line appearing 3+ times → loop
     lines = [l.strip() for l in text.split("\n") if l.strip()]
     if len(lines) >= 5:
         counts = Counter(lines)
@@ -205,6 +201,45 @@ def _has_live_loop(text: str, min_len: int = 300, threshold: int = 3) -> bool:
     if len(lines) < 4:
         return False
     return Counter(lines).most_common(1)[0][1] >= threshold
+
+
+# ───────────────────────────────────────────────────────────
+# Tool list reload (after create_tool succeeds)
+# ───────────────────────────────────────────────────────────
+
+def _reload_tools():
+    """Rebuild TOOLS from _base_tools + learned schemas.
+
+    Called after create_tool succeeds so the new tool is available
+    on the very next LLM call without restarting JARVIS.
+    """
+    try:
+        import claude_tools
+        import self_extension
+
+        fresh = self_extension.load_learned_schemas()
+        base = getattr(claude_tools, "_base_tools", None)
+        if base is None:
+            # Older claude_tools.py without _base_tools — bail out
+            print("[brain] tool reload skipped: claude_tools has no _base_tools")
+            return
+
+        claude_tools.TOOLS.clear()
+        claude_tools.TOOLS.extend(base)
+        claude_tools.TOOLS.extend(fresh)
+
+        # Update our module-level view
+        globals()["TOOLS"] = claude_tools.TOOLS
+        globals()["VALID_TOOL_NAMES"] = {
+            t["function"]["name"] for t in claude_tools.TOOLS
+        }
+
+        learned_count = len(fresh)
+        total = len(claude_tools.TOOLS)
+        print(f"[brain] reloaded TOOLS — {total} tools "
+              f"({learned_count} learned)")
+    except Exception as e:
+        print(f"[brain] tool reload failed: {e}")
 
 
 # ───────────────────────────────────────────────────────────
@@ -276,7 +311,6 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
         msg = response.choices[0].message
 
         if not msg.tool_calls:
-            # Same narration detection as streaming
             if _looks_narrated(msg.content or ""):
                 messages.append({
                     "role": "assistant",
@@ -337,6 +371,12 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
             except json.JSONDecodeError:
                 args = {}
             result = execute_tool_fn(tc.function.name, args)
+
+            # Reload tool list if create_tool just succeeded
+            if (tc.function.name == "create_tool"
+                    and "created and saved" in str(result).lower()):
+                _reload_tools()
+
             messages.append({
                 "role": "tool",
                 "tool_call_id": tc.id,
@@ -407,7 +447,6 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
     _recent_calls = []
     _force_all_tools = False
     _retry_narrated = False
-    _live_loop_break = False
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -508,7 +547,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
             if delta.content:
                 content_buffer += delta.content
 
-                # Live loop break: kill the stream mid-flight if it's looping
+                # Live loop break
                 if _has_live_loop(content_buffer):
                     print("[brain] live loop detected — breaking stream")
                     _live_loop_break = True
@@ -587,6 +626,11 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         except Exception as e:
                             result = f"Tool error: {e}"
 
+                        # Reload tools if create_tool succeeded
+                        if (tool_name == "create_tool"
+                                and "created and saved" in str(result).lower()):
+                            _reload_tools()
+
                         content_buffer = content_buffer[:m.start()]
 
                         if tool_name in SELF_REPLYING_TOOLS:
@@ -617,9 +661,8 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         if tc.function.arguments:
                             tool_calls_buffer[idx]["arguments"] += tc.function.arguments
 
-        # ── If the live loop broke, or no tool calls were made ──
+        # ── Handle no-tool-calls or live-loop-break cases ──
         if _live_loop_break or not has_tool_calls:
-            # Narration / loop detection
             if _looks_narrated(content_buffer) or _live_loop_break:
                 if not _retry_narrated:
                     print("[brain] narrated/looping output — retrying with correction")
@@ -643,7 +686,6 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                     })
                     continue
                 else:
-                    # Retry already tried — give up gracefully
                     anticipate.log_query(user_text, _used_tools)
                     yield ("content",
                            "\n[I wasn't able to make a real tool call. "
@@ -721,6 +763,11 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 result = execute_tool_fn(tc["name"], args)
             except Exception as e:
                 result = f"Tool error: {e}"
+
+            # ── Reload tool list if create_tool just succeeded ──
+            if (tc["name"] == "create_tool"
+                    and "created and saved" in str(result).lower()):
+                _reload_tools()
 
             if tc["name"] not in ("create_tool",):
                 _used_tools.append({"name": tc["name"], "args": args})

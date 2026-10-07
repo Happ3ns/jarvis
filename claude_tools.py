@@ -1,6 +1,6 @@
 """Tool schemas for LLM tool-calling (JARVIS)."""
 import self_extension
-TOOLS = [
+_base_tools = [
         {
         "type": "function",
         "function": {
@@ -884,6 +884,7 @@ TOOLS = [
         },
     },
 ]
+TOOLS = list(_base_tools)
 # ---- Auto-load learned tools and add their schemas ----
 _learned_schemas = self_extension.load_learned_schemas()
 if _learned_schemas:
