@@ -125,7 +125,7 @@ SYSTEM_PROMPT = (
     "each ending with a newline, then a blank line. Skip PLAN for simple "
     "single-tool tasks. Execute the steps one after another, then give a "
     "1-2 sentence summary. "
-    "Max 8 tool calls per request. If a tool fails, try a different approach. "
+    "Max 25 tool calls per request. If a tool fails, try a different approach. "
 
     # ---- Response style ----
     "1-2 sentences unless the user asks for detail. Be concise. "
@@ -293,7 +293,7 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False,
 # Non-streaming (ask)
 # ───────────────────────────────────────────────────────────
 
-def ask(user_text: str, execute_tool_fn, max_steps: int = 8) -> str:
+def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
     """Non-streaming version."""
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -451,7 +451,7 @@ def _quick_plan(user_text: str) -> str:
 # Streaming (ask_stream)
 # ───────────────────────────────────────────────────────────
 
-def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 8):
+def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
     """Streaming version. Yields (kind, text) tuples."""
 
     # Anticipation cache check
