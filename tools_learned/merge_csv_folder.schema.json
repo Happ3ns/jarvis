@@ -1,0 +1,23 @@
+{
+  "type": "function",
+  "function": {
+    "name": "merge_csv_folder",
+    "description": "Merges all CSV files in a folder into one and saves the result.",
+    "parameters": {
+      "properties": {
+        "folder_path": {
+          "description": "Path to folder containing CSV files.",
+          "type": "string"
+        },
+        "output_path": {
+          "description": "Optional path to save merged CSV.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder_path"
+      ],
+      "type": "object"
+    }
+  }
+}

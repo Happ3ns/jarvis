@@ -1,0 +1,24 @@
+{
+  "type": "function",
+  "function": {
+    "name": "most_common_words",
+    "description": "Read a text file and return the top N most common words as a JSON string.",
+    "parameters": {
+      "properties": {
+        "file_path": {
+          "description": "Path to the text file to analyze",
+          "type": "string"
+        },
+        "top_n": {
+          "default": 10,
+          "description": "Number of most common words to return (default 10)",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    }
+  }
+}

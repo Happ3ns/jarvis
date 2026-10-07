@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "generate_qr_code",
+    "description": "Generates a QR code image for a given URL using an online API and saves it to disk.",
+    "parameters": {
+      "properties": {
+        "url": {
+          "description": "The URL to encode in the QR code.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    }
+  }
+}

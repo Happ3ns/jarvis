@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "extract_conversation_from_url",
+    "description": "Extracts visible text from a webpage URL and returns it as a string.",
+    "parameters": {
+      "properties": {
+        "url": {
+          "description": "URL of the page to extract conversation from",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    }
+  }
+}

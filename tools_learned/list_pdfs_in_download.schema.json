@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "list_pdfs_in_download",
+    "description": "List the first PDF file in a given directory",
+    "parameters": {
+      "properties": {
+        "folder_path": {
+          "description": "Path to the directory to search for PDFs",
+          "type": "string"
+        }
+      },
+      "required": [
+        "folder_path"
+      ],
+      "type": "object"
+    }
+  }
+}

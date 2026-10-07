@@ -1,0 +1,24 @@
+{
+  "type": "function",
+  "function": {
+    "name": "open_pdf",
+    "description": "Opens a PDF file using the default system viewer",
+    "parameters": {
+      "properties": {
+        "file_path": {
+          "description": "Full path to the PDF file",
+          "type": "string"
+        },
+        "open_in_browser": {
+          "default": false,
+          "description": "If true, open in browser instead of default viewer",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    }
+  }
+}

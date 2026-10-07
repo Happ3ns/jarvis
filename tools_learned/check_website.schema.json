@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "check_website",
+    "description": "Checks if a website is up and returns the response time in milliseconds.",
+    "parameters": {
+      "properties": {
+        "url": {
+          "description": "The URL to check.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    }
+  }
+}

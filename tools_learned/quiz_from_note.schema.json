@@ -1,0 +1,24 @@
+{
+  "type": "function",
+  "function": {
+    "name": "quiz_from_note",
+    "description": "Generate multiple-choice questions from a note file.",
+    "parameters": {
+      "properties": {
+        "file_path": {
+          "description": "Path to the note file",
+          "type": "string"
+        },
+        "top_n": {
+          "default": 5,
+          "description": "Number of questions to generate",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    }
+  }
+}

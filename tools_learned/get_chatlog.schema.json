@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "get_chatlog",
+    "description": "Read and return the full text of a chatlog file.",
+    "parameters": {
+      "properties": {
+        "file_path": {
+          "description": "Path to the chatlog text file.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "file_path"
+      ],
+      "type": "object"
+    }
+  }
+}

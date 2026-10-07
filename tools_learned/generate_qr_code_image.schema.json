@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "generate_qr_code_image",
+    "description": "Generates a PNG QR\u2011code image for given text or URL using an online API and returns the file path.",
+    "parameters": {
+      "properties": {
+        "data": {
+          "description": "The text or URL to encode in the QR code.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "data"
+      ],
+      "type": "object"
+    }
+  }
+}

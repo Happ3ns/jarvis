@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "play_song_on_spotify",
+    "description": "Play a song on Spotify by invoking the play_on_spotify tool.",
+    "parameters": {
+      "properties": {
+        "query": {
+          "description": "Song name or artist to play",
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    }
+  }
+}
