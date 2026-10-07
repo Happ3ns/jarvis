@@ -80,9 +80,15 @@ SYSTEM_PROMPT = (
     "run_experiment. Actually run it — do not just search the web. "
     "For past experiments: list_experiments. For one: show_experiment with ID. " 
 
-    
+
     "If the user sends a URL (http://, https://, or a domain like github.com), "
     "ALWAYS use open_url with that exact URL. NEVER use open_app for URLs. "
+
+    "When you intend to create a tool, you MUST call create_tool with "
+    "the structured tool_calls mechanism. Do NOT describe the tool in "
+    "text. Do NOT write 'I will create a tool' — either call create_tool, "
+    "or if you can't, say so plainly. Narrating intent without calling "
+    "the tool is a failure. "
 
     # ---- Universities/admissions ----
     "For university, admissions, SAT, or academic program questions: search "
