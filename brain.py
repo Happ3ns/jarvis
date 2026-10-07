@@ -1,7 +1,7 @@
 """LLM brain for JARVIS — Groq with Ollama fallback.
 
 Streams responses, detects plans, filters hallucinated tool names,
-retries on tool validation errors. Uses smart tool router to save tokens.
+retries on tool validation errors. Detects narrated/looping tool calls.
 """
 import ambient
 import json
@@ -10,6 +10,7 @@ import os
 import anticipate
 import tool_stats
 import lessons
+from collections import Counter
 from openai import OpenAI
 import recovery
 from claude_tools import TOOLS
@@ -26,6 +27,10 @@ _ollama_client = OpenAI(
     api_key="ollama",
 )
 
+# NOTE: gpt-oss models are far better at structured tool calls than
+# llama3.2:1b. Keep them first for reliability. Swap order if you want
+# to run on Ollama-first for free testing (but expect tool creation to
+# fail on the 1B model).
 MODELS = [
     (_groq_client, "openai/gpt-oss-120b"),
     (_groq_client, "openai/gpt-oss-20b"),
@@ -58,16 +63,16 @@ SYSTEM_PROMPT = (
     "The weather tool is 'get_weather' (not search_weather). "
     "The search tool is 'search_web' (not web_search). "
 
-    # ---- Tool call discipline (critical) ----
+    # ---- Tool call discipline (CRITICAL) ----
     "To use a tool, emit a STRUCTURED tool call via the tool_calls "
-    "mechanism. NEVER write the name of a tool as plain text. NEVER write "
-    "'create_tool \"x\"' as text. NEVER write 'calling create_tool' as "
-    "text. NEVER write 'with structured tool_calls' as text. NEVER write "
-    "a code block that looks like a tool call. If your response contains "
-    "the STRING 'create_tool' but no structured tool call was made, the "
-    "tool will NOT be created and you have failed. "
-    "Either make the real structured call, or say you cannot. "
-    "Narrating intent without acting is a failure. "
+    "mechanism. NEVER write the name of a tool as plain text. "
+    "Forbidden as plain text: 'create_tool \"x\"', 'calling create_tool', "
+    "'with structured tool_calls', 'call X with Y = Z', 'I will call X', "
+    "'I'll create a tool', 'executing tool:', 'running tool:'. "
+    "If you write any of those, the tool does NOT run and you have FAILED. "
+    "Either emit a real structured call, or say you cannot. "
+    "Do NOT repeat the same line twice. If you notice yourself repeating, "
+    "stop and emit a real tool call or give a plain-text answer. "
 
     # ---- Tool selection ----
     "Choose the most specific tool. "
@@ -95,12 +100,16 @@ SYSTEM_PROMPT = (
     "github.com), ALWAYS use open_url with that exact URL. NEVER use "
     "open_app for URLs. "
 
-    # ---- Self-extension ----
-    "If no existing tool fits, use create_tool. Short code (under 30 lines), "
-    "single quotes for strings, avoid triple-quotes and heavy regex escapes. "
-    "Include a small test_code. "
-    "After create_tool succeeds, STOP. Do not call the new tool in the same "
-    "response — it becomes available next turn. Just tell the user it was created. "
+    # ---- Self-extension (create_tool) ----
+    "When the user says 'create a tool', 'build a tool', 'make a tool', "
+    "'I wish you could X' — call create_tool as a STRUCTURED tool call. "
+    "Do NOT try to use the tool you are about to create — it does not "
+    "exist yet. Do NOT write 'call summarize_text with...' — instead "
+    "actually call create_tool with the code. "
+    "Write SHORT code (under 30 lines), single quotes for strings, "
+    "avoid triple-quotes and heavy regex. Include a small test_code. "
+    "After create_tool succeeds, STOP. Tell the user it was created and "
+    "wait for the next turn before using it. "
 
     # ---- Universities/admissions ----
     "For university, admissions, SAT, or academic program questions: search "
@@ -139,22 +148,73 @@ SYSTEM_PROMPT = (
 )
 
 
+# ───────────────────────────────────────────────────────────
+# Narration detection helper (used by ask_stream)
+# ───────────────────────────────────────────────────────────
+
+_NARRATION_PHRASES = [
+    "structured tool_calls",
+    'create_tool "',
+    "create_tool '",
+    "calling create_tool",
+    "call analyze_file with",
+    "call open_file_in_editor with",
+    "call create_tool with",
+    "call run_code with",
+    "call open_url with",
+    "call text_stats with",
+    "call summarize_text with",
+    "call gen_password with",
+    "call file_hash with",
+    "i will call ",
+    "i will create a tool",
+    "i'll call ",
+    "i'll create a tool",
+    "executing tool:",
+    "running tool:",
+    "tool_call:",
+    "tool_calls:",
+]
+
+
+def _looks_narrated(text: str) -> bool:
+    """True if text looks like a narrated tool call rather than a real one."""
+    if not text:
+        return False
+    buf_lower = text.lower()
+
+    if any(p in buf_lower for p in _NARRATION_PHRASES):
+        return True
+
+    # Repetition check: any single line appearing 3+ times → loop
+    lines = [l.strip() for l in text.split("\n") if l.strip()]
+    if len(lines) >= 5:
+        counts = Counter(lines)
+        if counts.most_common(1)[0][1] >= 3:
+            return True
+
+    return False
+
+
+def _has_live_loop(text: str, min_len: int = 300, threshold: int = 3) -> bool:
+    """Cheap mid-stream check: does the tail contain 3+ identical lines?"""
+    if len(text) < min_len:
+        return False
+    tail = text[-500:]
+    lines = [l.strip() for l in tail.split("\n") if l.strip()]
+    if len(lines) < 4:
+        return False
+    return Counter(lines).most_common(1)[0][1] >= threshold
+
+
+# ───────────────────────────────────────────────────────────
+# Model calls
+# ───────────────────────────────────────────────────────────
+
 def _call_with_fallback(messages, stream: bool = False, _retry: bool = False,
                         use_all_tools: bool = False):
-    """Try each model in order. On recoverable errors, retry once.
-
-    Router-miss recovery: if the LLM tries to call a tool that wasn't in
-    the sent subset, retry the SAME model with just that one tool added.
-    Costs ~100 extra tokens, not ~4,000.
-    """
+    """Try each model in order. On recoverable errors, retry once."""
     last_error = None
-
-    # Pick tools based on the latest user message
-    user_msg = ""
-    for m in reversed(messages):
-        if m.get("role") == "user":
-            user_msg = m.get("content", "")
-            break
 
     active_tools = TOOLS
 
@@ -171,62 +231,6 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False,
             )
         except Exception as e:
             err_str = str(e)
-
-            # ── Router-miss recovery ──
-            # The LLM tried to call a tool not in the sent subset. Add just
-            # that tool and retry the same model. Cheap, bounded, no loops.
-            is_router_miss = (
-                "not in request.tools" in err_str
-                or "tool call validation" in err_str
-                or "attempted to call tool" in err_str
-            )
-            if is_router_miss and not use_all_tools:
-                import re as _re2
-                m = _re2.search(r"attempted to call tool '([^']+)'", err_str)
-                missing_name = m.group(1) if m else None
-
-                if missing_name:
-                    print(f"[brain] router miss: '{missing_name}' — "
-                          f"retrying {model} with that tool added")
-                    extra = [t for t in TOOLS
-                             if t["function"]["name"] == missing_name]
-                    if extra:
-                        # Only add if not already in the subset
-                        existing_names = {t["function"]["name"]
-                                          for t in active_tools}
-                        if missing_name not in existing_names:
-                            new_tools = list(active_tools) + extra
-                        else:
-                            new_tools = active_tools
-                        try:
-                            return client.chat.completions.create(
-                                model=model,
-                                messages=messages,
-                                tools=new_tools,
-                                tool_choice="auto",
-                                max_tokens=4096,
-                                temperature=0.05 if _retry else 0.3,
-                                stream=stream,
-                            )
-                        except Exception as retry_err:
-                            print(f"[brain] miss-retry on {model} failed: "
-                                  f"{str(retry_err)[:80]}")
-                            last_error = retry_err
-                            continue  # next model
-
-                # Could not parse the tool name — fall back to full tool set
-                print(f"[brain] router miss (no tool name) — trying full set")
-                try:
-                    return _call_with_fallback(
-                        messages, stream=stream, _retry=True,
-                        use_all_tools=True,
-                    )
-                except Exception as retry_err:
-                    print(f"[brain] full-set retry failed: {str(retry_err)[:80]}")
-                    last_error = retry_err
-                    continue  # next model
-
-            # ── Standard recovery path ──
             result = recovery.classify(err_str)
             print(f"[brain] {model} failed ({result['category']}): {err_str[:100]}")
 
@@ -250,6 +254,10 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False,
     raise last_error
 
 
+# ───────────────────────────────────────────────────────────
+# Non-streaming (ask)
+# ───────────────────────────────────────────────────────────
+
 def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
     """Non-streaming version."""
     messages = [
@@ -268,6 +276,21 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
         msg = response.choices[0].message
 
         if not msg.tool_calls:
+            # Same narration detection as streaming
+            if _looks_narrated(msg.content or ""):
+                messages.append({
+                    "role": "assistant",
+                    "content": msg.content or "",
+                })
+                messages.append({
+                    "role": "system",
+                    "content": (
+                        "Your last response DESCRIBED a tool call in text "
+                        "but did NOT emit a structured call. That is a "
+                        "failure. Emit a real tool_calls entry now."
+                    ),
+                })
+                continue
             return msg.content or "I'm not sure how to help with that."
 
         messages.append({
@@ -295,18 +318,15 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
                 })
                 continue
 
-            # Loop protection — blocks 3rd identical call
             call_sig = (tc.function.name, tc.function.arguments)
             if _recent_calls.count(call_sig) >= 2:
-                print(f"[brain] loop detected: {tc.function.name} called with same args")
+                print(f"[brain] loop detected: {tc.function.name}")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
                     "content": (
-                        f"Error: {tc.function.name} was already called twice with "
-                        f"these exact arguments. Do not repeat. Try a different "
-                        f"tool, or tell the user the task cannot be completed "
-                        f"with current tools."
+                        f"Error: {tc.function.name} was already called twice "
+                        f"with these exact arguments. Do not repeat."
                     ),
                 })
                 continue
@@ -327,7 +347,6 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
 
 
 def _critique_plan(user_text: str, plan: str) -> str:
-    """Ask the LLM to critique a plan and return improved plan text."""
     try:
         response = _call_with_fallback(
             [
@@ -351,7 +370,6 @@ def _critique_plan(user_text: str, plan: str) -> str:
 
 
 def _quick_plan(user_text: str) -> str:
-    """Get a fast non-streaming draft plan for critique."""
     try:
         response = _call_with_fallback(
             [
@@ -369,16 +387,14 @@ def _quick_plan(user_text: str) -> str:
         return ""
 
 
+# ───────────────────────────────────────────────────────────
+# Streaming (ask_stream)
+# ───────────────────────────────────────────────────────────
+
 def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
-    """Streaming version. Yields (kind, text) tuples.
+    """Streaming version. Yields (kind, text) tuples."""
 
-    kind is one of:
-      'content' — normal reply text
-      'plan'    — the initial PLAN: block
-      'status'  — informational like "[Calling get_weather...]"
-    """
-
-    # ── Anticipation cache check ──
+    # Anticipation cache check
     hit, cached = anticipate.get_cached(user_text)
     if hit:
         anticipate.log_query(user_text, [])
@@ -391,6 +407,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
     _recent_calls = []
     _force_all_tools = False
     _retry_narrated = False
+    _live_loop_break = False
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -399,7 +416,6 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
 
     plan_state = "detecting"
 
-    # ── Conditional context injection ──
     lower = user_text.lower()
 
     needs_ambient = any(k in lower for k in (
@@ -422,7 +438,6 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
             extra = "\n\n".join(t for t in [stats_text, lessons_text] if t)
             messages.append({"role": "system", "content": extra})
 
-    # ── Self-critique for complex requests ──
     complex_markers = [
         "plan", "research", "compare", "and then", "then save",
         "then email", "then write", "build a tool",
@@ -441,16 +456,18 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 "content": f"Reviewed plan to follow:\n{critique}",
             })
 
-    # ── Self-replying tools ──
     SELF_REPLYING_TOOLS = {
         "play_on_spotify", "play_on_youtube", "stop_youtube",
         "stop_music", "stop_all_music",
         "open_app", "close_app", "open_file_in_editor",
         "take_note", "set_reminder", "set_timer",
         "shutdown", "restart", "sleep_system",
+        "create_tool",
     }
 
     for _ in range(max_steps):
+        _live_loop_break = False
+
         try:
             stream = _call_with_fallback(messages, stream=True,
                                           use_all_tools=_force_all_tools)
@@ -462,11 +479,8 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                     "role": "system",
                     "content": (
                         "CRITICAL: Your last response tried to call a tool "
-                        "with an invalid name. It contained extra tokens like "
-                        "'<|channel|>commentary'. Use ONLY the exact tool "
-                        "names from the tools list. Example: 'open_app', not "
-                        "'open_app<|channel|>commentary'. Retry now with a "
-                        "clean tool name."
+                        "with an invalid name. Use ONLY exact tool names "
+                        "from the tools list. Retry now with a clean name."
                     ),
                 })
                 try:
@@ -493,6 +507,12 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
 
             if delta.content:
                 content_buffer += delta.content
+
+                # Live loop break: kill the stream mid-flight if it's looping
+                if _has_live_loop(content_buffer):
+                    print("[brain] live loop detected — breaking stream")
+                    _live_loop_break = True
+                    break
 
                 if plan_state == "detecting":
                     stripped = content_buffer.lstrip()
@@ -530,11 +550,10 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         yield ("plan", delta.content)
                     continue
 
-                # ── Qwen raw-JSON tool call workaround ──
+                # Qwen raw-JSON tool call workaround
                 if (not _json_handled
                         and plan_state == "after_plan"
                         and '{"name"' in content_buffer):
-                    import re as _re
                     m = _re.search(
                         r'\{\s*"name"\s*:\s*"([^"]+)"\s*,\s*"'
                         r'(?:parameters|arguments)"\s*:\s*(\{.*?\})\s*\}',
@@ -551,18 +570,11 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                             tool_args = {}
                         print(f"[brain] detected raw JSON tool call: {tool_name}")
 
-                        # Loop protection
                         call_sig = (tool_name, json.dumps(tool_args, sort_keys=True))
                         if _recent_calls.count(call_sig) >= 2:
-                            print(f"[brain] loop detected (json path): {tool_name}")
                             messages.append({
                                 "role": "system",
-                                "content": (
-                                    f"Error: {tool_name} was already called "
-                                    f"twice with these arguments. Do not "
-                                    f"repeat. Try a different approach or "
-                                    f"tell the user it cannot be completed."
-                                ),
+                                "content": f"Error: {tool_name} already called twice.",
                             })
                             content_buffer = content_buffer[:m.start()]
                             continue
@@ -605,34 +617,39 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         if tc.function.arguments:
                             tool_calls_buffer[idx]["arguments"] += tc.function.arguments
 
-        if not has_tool_calls:
-            # Detect narrated tool call hallucination
-            buf_lower = content_buffer.lower()
-            narrated = (
-                ("structured tool_calls" in buf_lower
-                 or 'create_tool "' in buf_lower
-                 or "create_tool '" in buf_lower
-                 or "calling create_tool" in buf_lower)
-                and "create_tool" in buf_lower
-            )
-            if narrated and not _retry_narrated:
-                print("[brain] detected narrated tool call — retrying with correction")
-                _retry_narrated = True
-                messages.append({
-                    "role": "assistant",
-                    "content": content_buffer,
-                })
-                messages.append({
-                    "role": "system",
-                    "content": (
-                        "Your last response DESCRIBED a tool call in text "
-                        "but did NOT emit a structured tool call. This is "
-                        "a failure. You must emit a real structured "
-                        "tool_calls entry. Retry now with an actual call "
-                        "to create_tool."
-                    ),
-                })
-                continue
+        # ── If the live loop broke, or no tool calls were made ──
+        if _live_loop_break or not has_tool_calls:
+            # Narration / loop detection
+            if _looks_narrated(content_buffer) or _live_loop_break:
+                if not _retry_narrated:
+                    print("[brain] narrated/looping output — retrying with correction")
+                    _retry_narrated = True
+                    messages.append({
+                        "role": "assistant",
+                        "content": content_buffer[:800],
+                    })
+                    messages.append({
+                        "role": "system",
+                        "content": (
+                            "Your last response was NOT a structured tool "
+                            "call. You wrote text like 'call X with Y' or "
+                            "repeated the same line. This is a failure. "
+                            "If the user asked you to CREATE a tool, call "
+                            "create_tool with the code. If the user asked "
+                            "you to USE a tool, call that tool. Do NOT "
+                            "write tool names as text. Emit ONE real "
+                            "structured tool_calls entry now."
+                        ),
+                    })
+                    continue
+                else:
+                    # Retry already tried — give up gracefully
+                    anticipate.log_query(user_text, _used_tools)
+                    yield ("content",
+                           "\n[I wasn't able to make a real tool call. "
+                           "Try rephrasing the request.]")
+                    return
+
             anticipate.log_query(user_text, _used_tools)
             return
 
@@ -659,20 +676,6 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
             if original_name != tc["name"]:
                 print(f"[brain] normalized tool name: '{original_name}' -> '{tc['name']}'")
 
-            # ── Router meta-tool: expand to full tool set ──
-            if tc["name"] == "load_all_tools":
-                print("[brain] load_all_tools called — expanding tool set")
-                _force_all_tools = True
-                messages.append({
-                    "role": "tool",
-                    "tool_call_id": tc["id"],
-                    "content": (
-                        "Full tool set loaded. On your next turn you have "
-                        "access to all tools."
-                    ),
-                })
-                continue
-
             if tc["name"] not in VALID_TOOL_NAMES:
                 print(f"[brain] rejected hallucinated tool: {tc['name']}")
                 messages.append({
@@ -685,18 +688,15 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 })
                 continue
 
-            # ── Loop protection — blocks 3rd identical call ──
             call_sig = (tc["name"], tc["arguments"])
             if _recent_calls.count(call_sig) >= 2:
-                print(f"[brain] loop detected: {tc['name']} called with same args")
+                print(f"[brain] loop detected: {tc['name']}")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
                     "content": (
                         f"Error: {tc['name']} was already called twice with "
-                        f"these exact arguments. Do not repeat it. Try a "
-                        f"different tool, or tell the user the task cannot "
-                        f"be completed with current tools."
+                        f"these arguments. Do not repeat. Try a different tool."
                     ),
                 })
                 continue
@@ -711,10 +711,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                     "tool_call_id": tc["id"],
                     "content": (
                         "Error: your tool call arguments were not valid JSON. "
-                        "This usually happens when the code field is too long "
-                        "or contains unescaped characters. "
-                        "Please retry with shorter code and properly escaped "
-                        "strings (use \\n for newlines)."
+                        "Retry with shorter code and properly escaped strings."
                     ),
                 })
                 continue
@@ -728,7 +725,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
             if tc["name"] not in ("create_tool",):
                 _used_tools.append({"name": tc["name"], "args": args})
 
-            # Self-replying tools: stream result directly, skip LLM round-trip
+            # Self-replying tools: stream result directly
             if (tc["name"] in SELF_REPLYING_TOOLS
                     and not str(result).startswith("Tool error")):
                 yield ("content", str(result))
