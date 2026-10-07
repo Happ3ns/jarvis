@@ -29,8 +29,6 @@ _ollama_client = OpenAI(
     api_key="ollama",
 )
 
-# gpt-oss models handle structured tool calls far better than the
-# 1B Ollama model. Keep them first for reliability.
 MODELS = [
     (_groq_client, "openai/gpt-oss-120b"),
     (_groq_client, "openai/gpt-oss-20b"),
@@ -73,6 +71,12 @@ SYSTEM_PROMPT = (
     "Either emit a real structured call, or say you cannot. "
     "Do NOT repeat the same line twice. If you notice yourself repeating, "
     "stop and emit a real tool call or give a plain-text answer. "
+
+    # ---- Loop discipline (CRITICAL) ----
+    "Once a tool returns a result, USE IT. Do not call the same tool again "
+    "just because the result could be better. If you have called a tool "
+    "3 times already in one turn, stop calling it and answer the user with "
+    "whatever data you have. Repeatedly calling the same tool is a failure. "
 
     # ---- Tool selection ----
     "Choose the most specific tool. "
@@ -121,7 +125,7 @@ SYSTEM_PROMPT = (
     "each ending with a newline, then a blank line. Skip PLAN for simple "
     "single-tool tasks. Execute the steps one after another, then give a "
     "1-2 sentence summary. "
-    "Max 25 tool calls per request. If a tool fails, try a different approach. "
+    "Max 8 tool calls per request. If a tool fails, try a different approach. "
 
     # ---- Response style ----
     "1-2 sentences unless the user asks for detail. Be concise. "
@@ -182,7 +186,6 @@ def _looks_narrated(text: str) -> bool:
     if any(p in buf_lower for p in _NARRATION_PHRASES):
         return True
 
-    # Repetition: any single line appearing 3+ times → loop
     lines = [l.strip() for l in text.split("\n") if l.strip()]
     if len(lines) >= 5:
         counts = Counter(lines)
@@ -203,16 +206,17 @@ def _has_live_loop(text: str, min_len: int = 300, threshold: int = 3) -> bool:
     return Counter(lines).most_common(1)[0][1] >= threshold
 
 
+def _tool_name_count(recent_calls, name):
+    """How many times has this tool name been called in this turn?"""
+    return sum(1 for c in recent_calls if c[0] == name)
+
+
 # ───────────────────────────────────────────────────────────
 # Tool list reload (after create_tool succeeds)
 # ───────────────────────────────────────────────────────────
 
 def _reload_tools():
-    """Rebuild TOOLS from _base_tools + learned schemas.
-
-    Called after create_tool succeeds so the new tool is available
-    on the very next LLM call without restarting JARVIS.
-    """
+    """Rebuild TOOLS from _base_tools + learned schemas."""
     try:
         import claude_tools
         import self_extension
@@ -220,7 +224,6 @@ def _reload_tools():
         fresh = self_extension.load_learned_schemas()
         base = getattr(claude_tools, "_base_tools", None)
         if base is None:
-            # Older claude_tools.py without _base_tools — bail out
             print("[brain] tool reload skipped: claude_tools has no _base_tools")
             return
 
@@ -228,7 +231,6 @@ def _reload_tools():
         claude_tools.TOOLS.extend(base)
         claude_tools.TOOLS.extend(fresh)
 
-        # Update our module-level view
         globals()["TOOLS"] = claude_tools.TOOLS
         globals()["VALID_TOOL_NAMES"] = {
             t["function"]["name"] for t in claude_tools.TOOLS
@@ -236,8 +238,7 @@ def _reload_tools():
 
         learned_count = len(fresh)
         total = len(claude_tools.TOOLS)
-        print(f"[brain] reloaded TOOLS — {total} tools "
-              f"({learned_count} learned)")
+        print(f"[brain] reloaded TOOLS — {total} tools ({learned_count} learned)")
     except Exception as e:
         print(f"[brain] tool reload failed: {e}")
 
@@ -250,7 +251,6 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False,
                         use_all_tools: bool = False):
     """Try each model in order. On recoverable errors, retry once."""
     last_error = None
-
     active_tools = TOOLS
 
     for client, model in MODELS:
@@ -293,7 +293,7 @@ def _call_with_fallback(messages, stream: bool = False, _retry: bool = False,
 # Non-streaming (ask)
 # ───────────────────────────────────────────────────────────
 
-def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
+def ask(user_text: str, execute_tool_fn, max_steps: int = 8) -> str:
     """Non-streaming version."""
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -301,6 +301,7 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
     ]
 
     _recent_calls = []
+    _last_tool_result = None
 
     for _ in range(max_steps):
         try:
@@ -353,8 +354,9 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
                 continue
 
             call_sig = (tc.function.name, tc.function.arguments)
+
+            # Exact-arg repeat check
             if _recent_calls.count(call_sig) >= 2:
-                print(f"[brain] loop detected: {tc.function.name}")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
@@ -364,6 +366,20 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
                     ),
                 })
                 continue
+
+            # Tool-name repeat check (catches search_news loops)
+            if _tool_name_count(_recent_calls, tc.function.name) >= 4:
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": (
+                        f"Error: {tc.function.name} has been called 4+ times "
+                        f"in this turn. Stop. Answer the user with whatever "
+                        f"data you have."
+                    ),
+                })
+                continue
+
             _recent_calls.append(call_sig)
 
             try:
@@ -371,8 +387,9 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
             except json.JSONDecodeError:
                 args = {}
             result = execute_tool_fn(tc.function.name, args)
+            if result and not str(result).startswith("Tool error"):
+                _last_tool_result = str(result)
 
-            # Reload tool list if create_tool just succeeded
             if (tc.function.name == "create_tool"
                     and "created and saved" in str(result).lower()):
                 _reload_tools()
@@ -383,6 +400,9 @@ def ask(user_text: str, execute_tool_fn, max_steps: int = 25) -> str:
                 "content": str(result),
             })
 
+    # Max steps reached — surface the last valid tool result if we have one
+    if _last_tool_result:
+        return _last_tool_result
     return "That request took too many steps."
 
 
@@ -431,7 +451,7 @@ def _quick_plan(user_text: str) -> str:
 # Streaming (ask_stream)
 # ───────────────────────────────────────────────────────────
 
-def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
+def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 8):
     """Streaming version. Yields (kind, text) tuples."""
 
     # Anticipation cache check
@@ -447,6 +467,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
     _recent_calls = []
     _force_all_tools = False
     _retry_narrated = False
+    _last_tool_result = None
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -547,7 +568,6 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
             if delta.content:
                 content_buffer += delta.content
 
-                # Live loop break
                 if _has_live_loop(content_buffer):
                     print("[brain] live loop detected — breaking stream")
                     _live_loop_break = True
@@ -610,6 +630,8 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         print(f"[brain] detected raw JSON tool call: {tool_name}")
 
                         call_sig = (tool_name, json.dumps(tool_args, sort_keys=True))
+
+                        # Exact-arg repeat
                         if _recent_calls.count(call_sig) >= 2:
                             messages.append({
                                 "role": "system",
@@ -617,6 +639,19 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                             })
                             content_buffer = content_buffer[:m.start()]
                             continue
+
+                        # Tool-name repeat
+                        if _tool_name_count(_recent_calls, tool_name) >= 4:
+                            messages.append({
+                                "role": "system",
+                                "content": (
+                                    f"Error: {tool_name} has been called 4+ "
+                                    f"times. Stop. Answer the user now."
+                                ),
+                            })
+                            content_buffer = content_buffer[:m.start()]
+                            continue
+
                         _recent_calls.append(call_sig)
 
                         yield ("status", f"[Calling {tool_name}...]")
@@ -626,7 +661,9 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                         except Exception as e:
                             result = f"Tool error: {e}"
 
-                        # Reload tools if create_tool succeeded
+                        if result and not str(result).startswith("Tool error"):
+                            _last_tool_result = str(result)
+
                         if (tool_name == "create_tool"
                                 and "created and saved" in str(result).lower()):
                             _reload_tools()
@@ -687,9 +724,12 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                     continue
                 else:
                     anticipate.log_query(user_text, _used_tools)
-                    yield ("content",
-                           "\n[I wasn't able to make a real tool call. "
-                           "Try rephrasing the request.]")
+                    if _last_tool_result:
+                        yield ("content", _last_tool_result)
+                    else:
+                        yield ("content",
+                               "\n[I wasn't able to make a real tool call. "
+                               "Try rephrasing the request.]")
                     return
 
             anticipate.log_query(user_text, _used_tools)
@@ -731,8 +771,10 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                 continue
 
             call_sig = (tc["name"], tc["arguments"])
+
+            # Exact-arg repeat check
             if _recent_calls.count(call_sig) >= 2:
-                print(f"[brain] loop detected: {tc['name']}")
+                print(f"[brain] loop detected (same args): {tc['name']}")
                 messages.append({
                     "role": "tool",
                     "tool_call_id": tc["id"],
@@ -742,6 +784,22 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                     ),
                 })
                 continue
+
+            # Tool-name repeat check (catches search_news loops)
+            if _tool_name_count(_recent_calls, tc["name"]) >= 4:
+                print(f"[brain] loop detected (same tool 4+): {tc['name']}")
+                messages.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": (
+                        f"Error: {tc['name']} has already been called 4 or "
+                        f"more times in this turn. Stop calling it and answer "
+                        f"the user with whatever data you have. Repeatedly "
+                        f"calling the same tool is a failure."
+                    ),
+                })
+                continue
+
             _recent_calls.append(call_sig)
 
             try:
@@ -764,7 +822,9 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
             except Exception as e:
                 result = f"Tool error: {e}"
 
-            # ── Reload tool list if create_tool just succeeded ──
+            if result and not str(result).startswith("Tool error"):
+                _last_tool_result = str(result)
+
             if (tc["name"] == "create_tool"
                     and "created and saved" in str(result).lower()):
                 _reload_tools()
@@ -787,4 +847,9 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
             })
 
     anticipate.log_query(user_text, _used_tools)
-    yield ("content", "\n[Max steps reached]")
+
+    # Max steps reached — surface the last valid tool result if we have one
+    if _last_tool_result:
+        yield ("content", _last_tool_result)
+    else:
+        yield ("content", "\n[Max steps reached]")
