@@ -49,6 +49,7 @@ def _normalize_tool_name(name: str) -> str:
 
 SYSTEM_PROMPT = (
     "You are JARVIS, an autonomous agent. Chain tools to complete goals. "
+    "Never write the word 'assistant' in your replies. You are JARVIS. "
 
     # ---- Tool name discipline ----
     "ONLY call tools that appear in the tools list. Never invent names. "
@@ -56,6 +57,17 @@ SYSTEM_PROMPT = (
     "'<|channel|>commentary'. Use 'open_app', not 'open_app.channel'. "
     "The weather tool is 'get_weather' (not search_weather). "
     "The search tool is 'search_web' (not web_search). "
+
+    # ---- Tool call discipline (critical) ----
+    "To use a tool, emit a STRUCTURED tool call via the tool_calls "
+    "mechanism. NEVER write the name of a tool as plain text. NEVER write "
+    "'create_tool \"x\"' as text. NEVER write 'calling create_tool' as "
+    "text. NEVER write 'with structured tool_calls' as text. NEVER write "
+    "a code block that looks like a tool call. If your response contains "
+    "the STRING 'create_tool' but no structured tool call was made, the "
+    "tool will NOT be created and you have failed. "
+    "Either make the real structured call, or say you cannot. "
+    "Narrating intent without acting is a failure. "
 
     # ---- Tool selection ----
     "Choose the most specific tool. "
@@ -78,17 +90,17 @@ SYSTEM_PROMPT = (
     "For experiments ('investigate', 'test whether', 'find out why', "
     "'run an experiment on', 'compare X and Y empirically'): use "
     "run_experiment. Actually run it — do not just search the web. "
-    "For past experiments: list_experiments. For one: show_experiment with ID. " 
+    "For past experiments: list_experiments. For one: show_experiment with ID. "
+    "If the user sends a URL (http://, https://, or a domain like "
+    "github.com), ALWAYS use open_url with that exact URL. NEVER use "
+    "open_app for URLs. "
 
-
-    "If the user sends a URL (http://, https://, or a domain like github.com), "
-    "ALWAYS use open_url with that exact URL. NEVER use open_app for URLs. "
-
-    "When you intend to create a tool, you MUST call create_tool with "
-    "the structured tool_calls mechanism. Do NOT describe the tool in "
-    "text. Do NOT write 'I will create a tool' — either call create_tool, "
-    "or if you can't, say so plainly. Narrating intent without calling "
-    "the tool is a failure. "
+    # ---- Self-extension ----
+    "If no existing tool fits, use create_tool. Short code (under 30 lines), "
+    "single quotes for strings, avoid triple-quotes and heavy regex escapes. "
+    "Include a small test_code. "
+    "After create_tool succeeds, STOP. Do not call the new tool in the same "
+    "response — it becomes available next turn. Just tell the user it was created. "
 
     # ---- Universities/admissions ----
     "For university, admissions, SAT, or academic program questions: search "
@@ -98,17 +110,9 @@ SYSTEM_PROMPT = (
     # ---- Planning ----
     "For 3+ tool-call tasks, start with 'PLAN:' followed by max 3 short lines, "
     "each ending with a newline, then a blank line. Skip PLAN for simple "
-    "single-tool tasks. NEVER write tool-call JSON as plain text — use the "
-    "structured tool_calls mechanism, or answer directly. "
-    "Execute the steps one after another, then give a 1-2 sentence summary. "
+    "single-tool tasks. Execute the steps one after another, then give a "
+    "1-2 sentence summary. "
     "Max 25 tool calls per request. If a tool fails, try a different approach. "
-
-    # ---- Self-extension ----
-    "If no existing tool fits, use create_tool. Short code (under 30 lines), "
-    "single quotes for strings, avoid triple-quotes and heavy regex escapes. "
-    "Include a small test_code. "
-    "After create_tool succeeds, STOP. Do not call the new tool in the same "
-    "response — it becomes available next turn. Just tell the user it was created. "
 
     # ---- Response style ----
     "1-2 sentences unless the user asks for detail. Be concise. "
@@ -132,9 +136,6 @@ SYSTEM_PROMPT = (
 
     # ---- Anti-hallucination ----
     "Never make up data — use tools. Never claim to have done something you did not do. "
-
-    "If you need a tool that is not in your current list, call "
-    "load_all_tools. It will expand the available tools next turn. "
 )
 
 
@@ -389,6 +390,7 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
     _used_tools = []
     _recent_calls = []
     _force_all_tools = False
+    _retry_narrated = False
 
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
@@ -604,6 +606,33 @@ def ask_stream(user_text: str, execute_tool_fn, max_steps: int = 25):
                             tool_calls_buffer[idx]["arguments"] += tc.function.arguments
 
         if not has_tool_calls:
+            # Detect narrated tool call hallucination
+            buf_lower = content_buffer.lower()
+            narrated = (
+                ("structured tool_calls" in buf_lower
+                 or 'create_tool "' in buf_lower
+                 or "create_tool '" in buf_lower
+                 or "calling create_tool" in buf_lower)
+                and "create_tool" in buf_lower
+            )
+            if narrated and not _retry_narrated:
+                print("[brain] detected narrated tool call — retrying with correction")
+                _retry_narrated = True
+                messages.append({
+                    "role": "assistant",
+                    "content": content_buffer,
+                })
+                messages.append({
+                    "role": "system",
+                    "content": (
+                        "Your last response DESCRIBED a tool call in text "
+                        "but did NOT emit a structured tool call. This is "
+                        "a failure. You must emit a real structured "
+                        "tool_calls entry. Retry now with an actual call "
+                        "to create_tool."
+                    ),
+                })
+                continue
             anticipate.log_query(user_text, _used_tools)
             return
 
