@@ -73,9 +73,48 @@ def get_ip() -> str:
         return "Couldn't fetch your IP."
 
 
+# ---------- URL helper (used by open_app + open_file_in_editor) ----------
+
+def _looks_like_url(text: str) -> bool:
+    """True if text is clearly a URL, not a filename or app name."""
+    if not text:
+        return False
+    t = text.strip().lower()
+    if t.startswith(("http://", "https://", "www.")):
+        return True
+    # Bare domains like github.com/foo — must have a known TLD and no spaces
+    if " " in t:
+        return False
+    return any(
+        t.endswith(tld) or f"{tld}/" in t
+        for tld in (".com", ".org", ".net", ".io", ".dev", ".in", ".co",
+                    ".ai", ".app", ".xyz", ".me", ".edu", ".gov")
+    )
+
+
+def _open_in_browser(url: str) -> str:
+    """Try JARVIS browser first (persistent profile), else system default."""
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+    try:
+        import browser_control
+        browser_control.open_url(url)
+        return f"Opened {url} in browser."
+    except Exception:
+        try:
+            webbrowser.open(url)
+            return f"Opened {url}."
+        except Exception as e:
+            return f"Couldn't open {url}: {e}"
+
+
 # ---------- Launcher tools ----------
 
 def open_app(app_name: str) -> str:
+    # Defensive: if the LLM passed a URL, route to the browser instead
+    if _looks_like_url(app_name):
+        return _open_in_browser(app_name.strip())
+
     apps = {
         "spotify":    os.path.expandvars(r"%APPDATA%\Spotify\Spotify.exe"),
         "chrome":     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -112,25 +151,32 @@ def open_app(app_name: str) -> str:
     except Exception as e:
         return f"Failed to open {matched}: {e}"
 
-def open_file_in_editor(path: str, line: int = None) -> str:
-    """Open a file in VS Code (or default editor) at an optional line."""
-    from pathlib import Path
 
-    p = Path(path)
+def open_file_in_editor(path: str, line: int = None) -> str:
+    """Open a file in VS Code (or default editor) at an optional line.
+
+    If given a URL by mistake, opens it in the browser instead.
+    """
+    from pathlib import Path as _Path
+
+    # Defensive: if the LLM passed a URL, route to the browser
+    if _looks_like_url(path):
+        return _open_in_browser(path.strip())
+
+    p = _Path(path)
     if not p.is_absolute():
-        # Try relative to the jarvis folder
-        here = Path(__file__).parent
+        here = _Path(__file__).parent
         if (here / path).exists():
             p = here / path
         elif (here / "tools_learned" / path).exists():
             p = here / "tools_learned" / path
         else:
-            p = Path.cwd() / path
+            p = _Path.cwd() / path
 
     if not p.exists():
         return f"File not found: {path}"
 
-    # Try VS Code CLI first
+    # Try VS Code CLI first (multiple known install paths)
     vscode_paths = [
         os.path.expandvars(r"%LOCALAPPDATA%\Programs\Microsoft VS Code\Code.exe"),
         r"C:\Program Files\Microsoft VS Code\Code.exe",
@@ -169,14 +215,11 @@ def open_website(site: str) -> str:
     }
     name = site.lower().strip().replace(" ", "")
     if name in shortcuts:
-        webbrowser.open(shortcuts[name])
-        return f"Opening {site}."
+        return _open_in_browser(shortcuts[name])
     if "." in name:
         url = name if name.startswith("http") else f"https://{name}"
-        webbrowser.open(url)
-        return f"Opening {site}."
-    webbrowser.open(f"https://www.google.com/search?q={site}")
-    return f"I didn't recognize {site}, so I searched for it on Google."
+        return _open_in_browser(url)
+    return _open_in_browser(f"https://www.google.com/search?q={site}")
 
 
 # ---------- Wikipedia ----------
@@ -314,8 +357,7 @@ def play_on_spotify(query: str) -> str:
             except Exception as e:
                 return f"Couldn't open Spotify browser: {e}"
 
-            # Wait for the web player to register as a device
-                        # Check immediately first (browser may already be open)
+            # Check immediately first (browser may already be open)
             devices = sp.devices().get("devices", [])
             chosen = next((d for d in devices if is_browser(d) and usable(d)), None)
 
@@ -380,34 +422,7 @@ def calculate(expression: str) -> str:
     except Exception:
         return "I couldn't parse that math."
 
-def open_file_in_editor(path: str, line: int = None) -> str:
-    """Open a file in VS Code (or default editor) at an optional line."""
-    import subprocess
-    import os
-    from pathlib import Path
 
-    p = Path(path)
-    if not p.exists():
-        # Try to find it in the jarvis folder
-        candidate = Path(__file__).parent / path
-        if candidate.exists():
-            p = candidate
-        else:
-            return f"File not found: {path}"
-
-    try:
-        if line:
-            subprocess.Popen(["code", "-g", f"{p}:{line}"])
-        else:
-            subprocess.Popen(["code", str(p)])
-        return f"Opened {p.name} in VS Code."
-    except FileNotFoundError:
-        # VS Code CLI not on PATH — fall back to os.startfile
-        try:
-            os.startfile(str(p))
-            return f"Opened {p.name} in default editor."
-        except Exception as e:
-            return f"Couldn't open {p.name}: {e}"
 # ---------- Utilities ----------
 
 _timers = []

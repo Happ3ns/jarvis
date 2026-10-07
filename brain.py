@@ -78,7 +78,11 @@ SYSTEM_PROMPT = (
     "For experiments ('investigate', 'test whether', 'find out why', "
     "'run an experiment on', 'compare X and Y empirically'): use "
     "run_experiment. Actually run it — do not just search the web. "
-    "For past experiments: list_experiments. For one: show_experiment with ID. "
+    "For past experiments: list_experiments. For one: show_experiment with ID. " 
+
+    
+    "If the user sends a URL (http://, https://, or a domain like github.com), "
+    "ALWAYS use open_url with that exact URL. NEVER use open_app for URLs. "
 
     # ---- Universities/admissions ----
     "For university, admissions, SAT, or academic program questions: search "
