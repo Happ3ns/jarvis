@@ -681,6 +681,8 @@ MIT License — use, modify, and extend freely. See [LICENSE](LICENSE) for detai
 - [Ollama](https://ollama.com) for local model inference.
 - The open-source community for the many libraries that make JARVIS possible.
 
----
+## Related projects
+
+- **[singapore-island-biodiversity](https://github.com/Happ3ns/singapore-island-biodiversity)** — a machine-learning pipeline using the same evidence-based approach applied to real environmental data. JARVIS calls it as a tool via `biodiversity_forecast()`.
 
 *"Sometimes you gotta run before you can walk." — Tony Stark*
