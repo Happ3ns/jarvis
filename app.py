@@ -1,23 +1,41 @@
 """Web UI for JARVIS — Flask server with streaming support."""
 
 import json
+import threading
+
+from voice import speak, listen_voice, stop_speaking
 import memory
 import ambient
 import anticipate
-from jarvis import execute_tool
-from flask import Flask, render_template, request, jsonify, Response
-
-from jarvis import think_stream, QUIET_PREFIX
-from voice import listen_voice, speak
+from jarvis import execute_tool, think_stream, QUIET_PREFIX
 from advanced import remember
+from flask import Flask, render_template, request, jsonify, Response
 
 app = Flask(__name__)
 
 EXIT_WORDS = ["exit", "goodbye", "shut down", "quit"]
 
+# Replies longer than this are shown on screen but NOT read aloud.
+# Tune to taste. 400 chars ≈ 4-5 sentences.
+MAX_SPOKEN_CHARS = 400
+
 
 def _is_exit(text: str) -> bool:
     return text.lower().strip() in EXIT_WORDS
+
+
+def speak_async(text: str, quiet: bool = False, force: bool = False) -> None:
+    """Fire speech on a background thread so the request thread isn't blocked.
+
+    Skips audio entirely when the reply is longer than MAX_SPOKEN_CHARS,
+    unless force=True. This is what stops JARVIS reading entire essays aloud.
+    """
+    if quiet or not text or not text.strip():
+        return
+    if not force and len(text) > MAX_SPOKEN_CHARS:
+        print(f"[TTS] skipping audio — reply is {len(text)} chars (max {MAX_SPOKEN_CHARS})")
+        return
+    threading.Thread(target=speak, args=(text, quiet), daemon=True).start()
 
 
 @app.route("/")
@@ -34,7 +52,7 @@ def command():
         return jsonify({"error": "empty command"}), 400
 
     if _is_exit(user_text):
-        speak("Goodbye.")
+        speak_async("Goodbye.", force=True)
         return jsonify({
             "user": user_text, "reply": "Goodbye.",
             "speak": True, "exit": True,
@@ -47,21 +65,32 @@ def command():
 
     quiet = full_reply.startswith(QUIET_PREFIX)
     reply = full_reply[len(QUIET_PREFIX):] if quiet else full_reply
-    if not quiet:
-        speak(reply)
+
     remember(user_text, reply)
-    
-    memory.log_conversation(user_text, reply)   # <-- new line
+    memory.log_conversation(user_text, reply)
+    speak_async(reply, quiet=quiet)
+
     return jsonify({
         "user": user_text, "reply": reply,
         "speak": not quiet, "exit": False,
     })
+
+
+@app.route("/api/voice/stop", methods=["POST"])
+def voice_stop():
+    try:
+        stop_speaking()
+    except Exception as e:
+        return jsonify({"ok": False, "error": str(e)}), 500
+    return jsonify({"ok": True})
+
 
 @app.route("/api/notifications", methods=["GET"])
 def get_notifications():
     """Return and clear queued notifications."""
     import notifications
     return jsonify({"notifications": notifications.drain()})
+
 
 @app.route("/api/tasks", methods=["GET"])
 def get_tasks():
@@ -76,13 +105,15 @@ def get_tasks():
         ).fetchall()
     return jsonify({"tasks": [dict(r) for r in rows]})
 
+
 @app.route("/api/system", methods=["GET"])
 def get_system():
     try:
         import psutil
+        import os
         cpu = psutil.cpu_percent(interval=0.1)
         mem = psutil.virtual_memory().percent
-        disk = psutil.disk_usage("C:\\").percent if __import__("os").name == "nt" else psutil.disk_usage("/").percent
+        disk = psutil.disk_usage("C:\\").percent if os.name == "nt" else psutil.disk_usage("/").percent
         net = psutil.net_io_counters()
         return jsonify({
             "cpu": round(cpu),
@@ -113,7 +144,6 @@ def memory_stats_endpoint():
 
 @app.route("/api/tool-stats", methods=["GET"])
 def tool_stats_endpoint():
-    import json
     from pathlib import Path
     stats_file = Path("tool_stats.json")
     if not stats_file.exists():
@@ -139,7 +169,6 @@ def tool_stats_endpoint():
 
 @app.route("/api/recent-files", methods=["GET"])
 def recent_files_endpoint():
-    import json
     from pathlib import Path
     state_file = Path("ambient_state.json")
     if not state_file.exists():
@@ -150,9 +179,9 @@ def recent_files_endpoint():
     except Exception:
         return jsonify({"files": []})
 
+
 @app.route("/api/ambient", methods=["GET"])
 def get_ambient():
-    import json
     from pathlib import Path
     state_file = Path("ambient_state.json")
     if not state_file.exists():
@@ -167,6 +196,7 @@ def get_ambient():
     except Exception:
         return jsonify({"active_app": None, "active_window": None, "idle": 0})
 
+
 @app.route("/api/command/stream", methods=["POST"])
 def command_stream():
     """Streaming endpoint — sends tokens as they're generated."""
@@ -177,7 +207,7 @@ def command_stream():
 
     def generate():
         if _is_exit(user_text):
-            speak("Goodbye.")
+            speak_async("Goodbye.", force=True)
             yield f"data: {json.dumps({'kind': 'exit', 'reply': 'Goodbye.'})}\n\n"
             return
 
@@ -199,12 +229,15 @@ def command_stream():
         quiet = full_reply.startswith(QUIET_PREFIX)
         reply = full_reply[len(QUIET_PREFIX):] if quiet else full_reply
 
-        # Speak AFTER all text has streamed to the browser
-        if not quiet:
-            speak(reply)
+        # Persist FIRST — so client disconnect mid-yield can't lose data.
         remember(user_text, reply)
         memory.log_conversation(user_text, reply)
+
+        # Yield 'done' to the browser IMMEDIATELY (HUD updates instantly),
+        # then fire speech in a background thread — never blocks this generator.
         yield f"data: {json.dumps({'kind': 'done', 'reply': reply, 'speak': not quiet})}\n\n"
+
+        speak_async(reply, quiet=quiet)
 
     return Response(
         generate(),
@@ -214,6 +247,8 @@ def command_stream():
             "X-Accel-Buffering": "no",
         },
     )
+
+
 @app.route("/api/experiments", methods=["GET"])
 def api_experiments():
     import experiment
@@ -227,9 +262,12 @@ def api_experiment_detail(exp_id):
     if not e:
         return jsonify({"error": "not found"}), 404
     return jsonify(e)
+
+
 @app.route("/api/anticipate-stats", methods=["GET"])
 def anticipate_stats():
     return jsonify(anticipate.stats())
+
 
 @app.route("/api/voice", methods=["POST"])
 def voice():
@@ -238,7 +276,7 @@ def voice():
         return jsonify({"error": "no speech detected"}), 200
 
     if _is_exit(user_text):
-        speak("Goodbye.")
+        speak_async("Goodbye.", force=True)
         return jsonify({
             "user": user_text, "reply": "Goodbye.",
             "speak": True, "exit": True,
@@ -251,11 +289,11 @@ def voice():
 
     quiet = full_reply.startswith(QUIET_PREFIX)
     reply = full_reply[len(QUIET_PREFIX):] if quiet else full_reply
-    if not quiet:
-        speak(reply)
+
     remember(user_text, reply)
-    
-    memory.log_conversation(user_text, reply)   # <-- new line
+    memory.log_conversation(user_text, reply)
+    speak_async(reply, quiet=quiet)
+
     return jsonify({
         "user": user_text, "reply": reply,
         "speak": not quiet, "exit": False,
@@ -272,7 +310,6 @@ if __name__ == "__main__":
     anticipate.start(execute_tool)
 
     # ---- Warm up the browser in the background ----
-    import threading
     import time as _time
 
     def warmup_browser():
@@ -299,6 +336,12 @@ if __name__ == "__main__":
     threading.Thread(target=warmup_browser, daemon=True).start()
 
     try:
-        app.run(host="127.0.0.1", port=5000, debug=False, use_reloader=False)
+        app.run(
+            host="127.0.0.1",
+            port=5000,
+            debug=False,
+            use_reloader=False,
+            threaded=True,       # ← critical: lets stop-request be served while speaking
+        )
     finally:
         daemon.stop()

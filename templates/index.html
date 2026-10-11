@@ -1346,7 +1346,7 @@ button { cursor: pointer; }
       <div class="modal-row"><kbd>Ctrl + J</kbd><span>Toggle right panel</span></div>
       <div class="modal-row"><kbd>T</kbd><span>Cycle theme</span></div>
       <div class="modal-row"><kbd>N</kbd><span>Toggle notification center</span></div>
-      <div class="modal-row"><kbd>Esc</kbd><span>Close any modal</span></div>
+      <div class="modal-row"><kbd>Esc</kbd><span>Stop speaking / close modal</span></div>
     </div>
   </div>
 </div>
@@ -1546,6 +1546,7 @@ button { cursor: pointer; }
           <span class="cmd-prefix mono">›</span>
           <input id="input" type="text" placeholder="ENTER COMMAND · /help for shortcuts" autocomplete="off" spellcheck="false">
           <button class="btn mic" id="mic-btn" title="Voice input">◉</button>
+          <button class="btn" id="stop-btn" title="Stop speaking (Esc)" style="display:none">■ Stop</button>
           <button class="btn" id="send-btn">Execute</button>
         </div>
       </div>
@@ -1650,6 +1651,7 @@ const transcript     = qs("#transcript");
 const input          = qs("#input");
 const micBtn         = qs("#mic-btn");
 const sendBtn        = qs("#send-btn");
+const stopBtn        = qs("#stop-btn");
 const clockEl        = qs("#clock");
 const uptimeEl       = qs("#uptime");
 const session2El     = qs("#session2");
@@ -1672,6 +1674,7 @@ let commandCount = 0;
 let unreadNotifs = 0;
 let themeIndex = 0;
 let notifHistory = [];
+let stateTimer = null;
 const sessionStart = Date.now();
 const THEMES = ["cyan", "gold", "purple", "crimson"];
 
@@ -1793,14 +1796,25 @@ updateClock();
 
 /* ───────────────── State machine ───────────────── */
 function setState(state) {
+  if (stateTimer) { clearTimeout(stateTimer); stateTimer = null; }
   app.className = `app${state ? " " + state : ""}`;
   statusEl.className = `status-pill${state ? " " + state : ""}`;
   statusText.textContent = state ? state.toUpperCase() : "IDLE";
+  stopBtn.style.display = state === "speaking" ? "" : "none";
 }
 
 function estimateSpeechMs(text) {
   return Math.max(1400, Math.min(14000, text.length * 72));
 }
+
+/* ───────────────── Speech interrupt ───────────────── */
+async function interruptSpeech() {
+  try { await fetch("/api/voice/stop", { method: "POST" }); } catch (e) { /* silent */ }
+  if (window.speechSynthesis) speechSynthesis.cancel();
+  setState("");
+}
+
+stopBtn.addEventListener("click", interruptSpeech);
 
 /* ───────────────── Transcript ───────────────── */
 function addMessage(who, text) {
@@ -2026,6 +2040,7 @@ qsa("#quickChips .chip").forEach((chip) => {
 /* ───────────────── Command send ───────────────── */
 async function sendCommand(text) {
   if (!text.trim()) return;
+  interruptSpeech();
   input.value = "";
   addMessage("You", text);
   logActivity(`&gt; ${text.slice(0, 26)}`, true);
@@ -2097,7 +2112,7 @@ async function sendCommand(text) {
           statusC.appendChild(s);
         } else if (p.kind === "done") {
           setState("speaking");
-          setTimeout(() => {
+          stateTimer = setTimeout(() => {
             setState("");
             statusC.style.display = "none";
           }, estimateSpeechMs(fullReply));
@@ -2105,7 +2120,8 @@ async function sendCommand(text) {
           refreshTools();
         } else if (p.kind === "exit") {
           textSpan.textContent = "Goodbye.";
-          setTimeout(() => {
+          setState("speaking");
+          stateTimer = setTimeout(() => {
             input.disabled = true;
             sendBtn.disabled = true;
             micBtn.disabled = true;
@@ -2116,7 +2132,7 @@ async function sendCommand(text) {
         } else if (p.kind === "error") {
           textSpan.textContent = `Error: ${p.text}`;
           setState("error");
-          setTimeout(() => setState(""), 1500);
+          stateTimer = setTimeout(() => setState(""), 1500);
         }
       }
       transcript.scrollTop = transcript.scrollHeight;
@@ -2124,12 +2140,13 @@ async function sendCommand(text) {
   } catch (e) {
     textSpan.textContent = `Network error: ${e.message}`;
     setState("error");
-    setTimeout(() => setState(""), 1500);
+    stateTimer = setTimeout(() => setState(""), 1500);
   }
 }
 
 /* ───────────────── Voice ───────────────── */
 async function triggerVoice() {
+  interruptSpeech();
   micBtn.disabled = true;
   setState("listening");
   logActivity("Listening...", true);
@@ -2146,7 +2163,7 @@ async function triggerVoice() {
     logActivity(`&gt; ${d.user.slice(0, 26)}`, true);
     if (d.exit) {
       setState("speaking");
-      setTimeout(() => {
+      stateTimer = setTimeout(() => {
         input.disabled = true;
         sendBtn.disabled = true;
         micBtn.disabled = true;
@@ -2157,14 +2174,14 @@ async function triggerVoice() {
     }
     if (d.speak) {
       setState("speaking");
-      setTimeout(() => setState(""), estimateSpeechMs(d.reply));
+      stateTimer = setTimeout(() => setState(""), estimateSpeechMs(d.reply));
     } else {
       setState("");
     }
   } catch (e) {
     addMessage("JARVIS", `Voice error: ${e.message}`);
     setState("error");
-    setTimeout(() => setState(""), 1500);
+    stateTimer = setTimeout(() => setState(""), 1500);
   } finally {
     micBtn.disabled = false;
   }
@@ -2253,6 +2270,11 @@ input.addEventListener("keydown", (e) => {
     handleArrow(e);
   } else if (e.key === "Tab") {
     handleTab(e);
+  } else if (e.key === "Escape") {
+    interruptSpeech();
+    closeShortcuts();
+    closePalette();
+    notifCenter.classList.remove("open");
   }
 });
 
@@ -2422,6 +2444,7 @@ document.addEventListener("keydown", (e) => {
 
   if (inInput) {
     if (e.key === "Escape") {
+      interruptSpeech();
       closeShortcuts();
       closePalette();
       notifCenter.classList.remove("open");
@@ -2444,6 +2467,7 @@ document.addEventListener("keydown", (e) => {
       notifBadge.style.display = "none";
     }
   } else if (e.key === "Escape") {
+    interruptSpeech();
     closeShortcuts();
     closePalette();
     notifCenter.classList.remove("open");
