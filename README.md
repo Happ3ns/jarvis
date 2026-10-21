@@ -4,7 +4,7 @@ An autonomous AI assistant with voice I/O, tool calling, code execution, browser
 
 Built in Python, JARVIS combines a Groq-powered LLM brain with a growing toolset (55+ built-in, unlimited learned), persistent memory, autonomous experiment mode, and a Stark Industries-style web HUD.
 
-![Stark HUD Interface](doc.png)
+![Stark HUD Interface](docs/hud.png)
 
 ---
 
