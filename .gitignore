@@ -25,3 +25,11 @@ experiments.db
 experiments/
 tasks.db
 memory.db
+# Ignore downloaded security tools
+nikto/
+sqlmap/
+
+# Ignore scratch files and scan outputs
+challenge.txt
+biodiversity_forecast.py
+gobuster_output.txt
