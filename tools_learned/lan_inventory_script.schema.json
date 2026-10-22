@@ -1,0 +1,12 @@
+{
+  "type": "function",
+  "function": {
+    "name": "lan_inventory_script",
+    "description": "Return a ready\u2011to\u2011run Python script that scans the local subnet for IP/MAC pairs using Scapy.",
+    "parameters": {
+      "properties": {},
+      "required": [],
+      "type": "object"
+    }
+  }
+}

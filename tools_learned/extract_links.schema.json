@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "extract_links",
+    "description": "Fetches a webpage and returns up to 20 unique links (href) with link text when available, one per line.",
+    "parameters": {
+      "properties": {
+        "url": {
+          "description": "The URL of the page to fetch.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "type": "object"
+    }
+  }
+}
