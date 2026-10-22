@@ -73,6 +73,31 @@ _base_tools = [
             },
         },
     },
+        {
+        "type": "function",
+        "function": {
+            "name": "biodiversity_forecast",
+            "description": (
+                "Return a predicted 2026 NDVI change forecast for one of "
+                "Singapore's micro-islands (Pulau Ubin, St. John's, Kusu, "
+                "Lazarus, Sisters', Pulau Hantu). Use when the user asks "
+                "about biodiversity risk, vegetation change, or island health."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "island_name": {
+                        "type": "string",
+                        "description": (
+                            "Name of the island, e.g. 'Pulau Ubin', 'Kusu', "
+                            "'St. John's'"
+                        ),
+                    }
+                },
+                "required": ["island_name"],
+            },
+        },
+    },
     {
         "type": "function",
         "function": {

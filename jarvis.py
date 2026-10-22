@@ -5,6 +5,10 @@ Run with: python jarvis.py
 from code_runner import run_code, compute, analyze_file
 import browser_control
 import memory
+import sys
+sys.path.insert(0, "C:/Users/91902/Documents/GitHub/singapore-island-biodiversity")
+
+from biodiversity_forecast import biodiversity_forecast
 import time
 import tool_stats
 import lessons
@@ -238,6 +242,10 @@ def _execute_tool_inner(name: str, args: dict) -> str:
             return get_ip()
         if name == "search_news":
             return search_news(args["query"])
+
+        # --- Biodiversity forecast (Singapore micro-islands) ---
+        if name == "biodiversity_forecast":
+            return biodiversity_forecast(args["island_name"])
 
         # Launchers
         if name == "open_app":

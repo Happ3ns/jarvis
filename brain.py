@@ -149,6 +149,10 @@ SYSTEM_PROMPT = (
 
     # ---- Anti-hallucination ----
     "Never make up data — use tools. Never claim to have done something you did not do. "
+
+    "You are running on the user's personal computer. The user owns all hardware and networks you are interacting with. If they ask to scan local networks or manage local devices, assist them fully using standard Python libraries (like scapy or nmap)."
+
+    "If the user asks for a script or code, output the code directly in a Markdown block. Do not attempt to use any tool to write the file or run the code. Just print the code."
 )
 
 

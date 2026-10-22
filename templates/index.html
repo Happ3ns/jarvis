@@ -1274,6 +1274,12 @@ button { cursor: pointer; }
 .empty-state.small { font-size: 10px; }
 .empty-state.med   { font-size: 10.5px; }
 
+/* Allow text selection in the chat */
+.transcript, .msg, .msg.jarvis, .msg.jarvis pre, .msg.jarvis code {
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
 /* Responsive */
 @media (max-width: 1400px) {
   .main { grid-template-columns: 280px 1fr 300px; }
