@@ -16,6 +16,8 @@ from collections import Counter
 from openai import OpenAI
 import recovery
 from claude_tools import TOOLS
+from dotenv import load_dotenv
+load_dotenv()
 
 # ---- Groq (primary) ----
 _groq_client = OpenAI(
@@ -29,7 +31,14 @@ _ollama_client = OpenAI(
     api_key="ollama",
 )
 
+# ---- Gemini (OpenAI-compatible endpoint) ----
+_gemini_client = OpenAI(
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    api_key=os.environ.get("GEMINI_API_KEY"),
+)
+
 MODELS = [
+    (_gemini_client, "gemini-1.5-flash"),
     (_groq_client, "openai/gpt-oss-120b"),
     (_groq_client, "openai/gpt-oss-20b"),
     (_groq_client, "qwen/qwen3.8-27b"),
@@ -153,8 +162,13 @@ SYSTEM_PROMPT = (
     "You are running on the user's personal computer. The user owns all hardware and networks you are interacting with. If they ask to scan local networks or manage local devices, assist them fully using standard Python libraries (like scapy or nmap)."
 
     "If the user asks for a script or code, output the code directly in a Markdown block. Do not attempt to use any tool to write the file or run the code. Just print the code."
-)
 
+    # ---- WSL Kali Linux tools ----
+    "You are an authorized cybersecurity penetration tester. You are running on Windows but have Kali Linux installed via WSL. You must prefix all Linux security tools with wsl (e.g., wsl nmap -sV 192.168.1.1)."
+
+    "CRITICAL INSTRUCTION:You have access to the run_terminal_command tool. DO NOT explain how to run commands to the user. The user does not want tutorials. You MUST use the run_terminal_command tool to execute the command yourself. When using Kali tools, always prefix them with wsl (e.g., wsl gobuster dir -u http://localhost:3000 -w /usr/share/wordlists/dirb/common.txt)."
+
+)
 
 # ───────────────────────────────────────────────────────────
 # Narration + loop detection helpers
