@@ -1,7 +1,25 @@
 """Tool schemas for LLM tool-calling (JARVIS)."""
 import self_extension
+
 _base_tools = [
-        {
+    {
+        "type": "function",
+        "function": {
+            "name": "run_terminal_command",
+            "description": "Run a command in the local Windows terminal. Use this for network scanning (nmap), web scanning (nikto, gobuster, sqlmap), or running local python scripts. Always prefix Linux security tools with 'wsl'.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The exact terminal command to run (e.g., 'wsl nmap -sV 192.168.1.1')"
+                    }
+                },
+                "required": ["command"]
+            }
+        }
+    }, # <--- FIXED COMMA
+    {
         "type": "function",
         "function": {
             "name": "schedule_task",
@@ -73,7 +91,7 @@ _base_tools = [
             },
         },
     },
-        {
+    {
         "type": "function",
         "function": {
             "name": "biodiversity_forecast",
@@ -120,7 +138,7 @@ _base_tools = [
             },
         },
     },
-        {
+    {
         "type": "function",
         "function": {
             "name": "create_tool",
@@ -177,8 +195,7 @@ _base_tools = [
             },
         },
     },
-    
-        # ---------- Browser automation ----------
+    # ---------- Browser automation ----------
     {
         "type": "function",
         "function": {
@@ -281,7 +298,7 @@ _base_tools = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
-        {
+    {
         "type": "function",
         "function": {
             "name": "run_code",
@@ -324,7 +341,7 @@ _base_tools = [
             },
         },
     },
-        # ---------- Long-term memory ----------
+    # ---------- Long-term memory ----------
     {
         "type": "function",
         "function": {
@@ -470,7 +487,6 @@ _base_tools = [
             },
         },
     },
-
     # ---------- RAG over files ----------
     {
         "type": "function",
@@ -512,7 +528,6 @@ _base_tools = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
-
     # ---------- Music ----------
     {
         "type": "function",
@@ -560,9 +575,8 @@ _base_tools = [
             },
         },
     },
-
     # ---------- Info ----------
-        {
+    {
         "type": "function",
         "function": {
             "name": "get_weather",
@@ -571,14 +585,13 @@ _base_tools = [
                 "type": "object",
                 "properties": {
                     "city": {
-                        "type": ["string", "null"],
-                        "description": "City name. Pass null or omit for Kanpur.",
+                        "type": "string", # Fixed from ["string", "null"] to prevent API errors
+                        "description": "City name. Omit or pass empty for Kanpur.",
                     }
                 },
             },
         },
     },
-
     {
         "type": "function",
         "function": {
@@ -659,7 +672,6 @@ _base_tools = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
-
     # ---------- Launchers ----------
     {
         "type": "function",
@@ -691,7 +703,6 @@ _base_tools = [
             },
         },
     },
-
     # ---------- Productivity ----------
     {
         "type": "function",
@@ -790,7 +801,6 @@ _base_tools = [
             },
         },
     },
-
     # ---------- Utilities ----------
     {
         "type": "function",
@@ -836,7 +846,7 @@ _base_tools = [
             },
         },
     },
-        {
+    {
         "type": "function",
         "function": {
             "name": "run_experiment",
@@ -882,7 +892,7 @@ _base_tools = [
             },
         },
     },
-        {
+    {
         "type": "function",
         "function": {
             "name": "open_file_in_editor",
@@ -909,7 +919,9 @@ _base_tools = [
         },
     },
 ]
+
 TOOLS = list(_base_tools)
+
 # ---- Auto-load learned tools and add their schemas ----
 _learned_schemas = self_extension.load_learned_schemas()
 if _learned_schemas:
@@ -919,4 +931,3 @@ if _learned_schemas:
         print(f"  - {s['function']['name']}: {s['function'].get('description', '')[:60]}")
 else:
     print("[claude_tools] No learned tools found")
-    

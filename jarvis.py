@@ -99,6 +99,12 @@ def execute_tool(name: str, args: dict) -> str:
 def _execute_tool_inner(name: str, args: dict) -> str:
     """Actual dispatcher — wrapped by execute_tool for stats."""
     try:
+        # --- TERMINAL COMMAND ROUTING ---
+        if name == "run_terminal_command":
+            from terminal_tools import run_terminal_command
+            return run_terminal_command(args.get("command", ""))
+        # --------------------------------
+
         if name == "run_experiment":
             import experiment
             return experiment.experiment_run(args["question"])
@@ -108,7 +114,8 @@ def _execute_tool_inner(name: str, args: dict) -> str:
         if name == "show_experiment":
             import experiment
             return experiment.experiment_show(args["experiment_id"])
-                # Scheduled tasks
+            
+        # Scheduled tasks
         if name == "schedule_task":
             import tasks
             return tasks.add_scheduled(
@@ -126,7 +133,7 @@ def _execute_tool_inner(name: str, args: dict) -> str:
             import tasks
             return tasks.delete(int(args["id"]))
         
-                # Self-extension
+        # Self-extension
         if name == "create_tool":
             return self_extension.create_tool(
                 name=args["name"],
@@ -135,15 +142,6 @@ def _execute_tool_inner(name: str, args: dict) -> str:
                 parameters=args["parameters"],
                 test_code=args["test_code"],
             )
-        if name == "run_experiment":
-            import experiment
-            return experiment.experiment_run(args["question"])
-        if name == "list_experiments":
-            import experiment
-            return experiment.experiment_list()
-        if name == "show_experiment":
-           import experiment
-           return experiment.experiment_show(args["experiment_id"])
 
         # Dispatch to learned tools
         learned = self_extension.load_learned_tools()
@@ -156,7 +154,8 @@ def _execute_tool_inner(name: str, args: dict) -> str:
             return agents.spawn_agents(args["tasks"], execute_tool)
         if name == "list_agent_roles":
             return agents.list_roles()
-                # Browser automation
+            
+        # Browser automation
         if name == "open_url":
             return browser_control.open_url(args["url"])
         if name == "search_youtube":
@@ -190,6 +189,7 @@ def _execute_tool_inner(name: str, args: dict) -> str:
             return compute(args["expression"])
         if name == "analyze_file":
             return analyze_file(args["path"], args.get("question", "describe this file"))
+            
         # RAG
         if name == "index_folder":
             return index_folder(args["folder_path"])
@@ -197,6 +197,7 @@ def _execute_tool_inner(name: str, args: dict) -> str:
             return ask_documents(args["question"])
         if name == "clear_index":
             return clear_index()
+            
         # Long-term memory
         if name == "remember_fact":
             return memory.remember_fact(args["text"])
@@ -214,6 +215,7 @@ def _execute_tool_inner(name: str, args: dict) -> str:
             return memory.get_stats()
         if name == "clear_all_facts":
             return memory.clear_all_facts()
+            
         # Music
         if name == "play_on_youtube":
             return play_on_youtube(args["query"])
@@ -252,8 +254,6 @@ def _execute_tool_inner(name: str, args: dict) -> str:
             return open_app(args["app_name"])
         if name == "open_website":
             return open_website(args["site"])
-        if name == "open_file_in_editor":
-            return open_file_in_editor(args["path"], args.get("line"))
 
         # Productivity
         if name == "take_screenshot":
@@ -291,7 +291,6 @@ def _execute_tool_inner(name: str, args: dict) -> str:
 def think_stream(user_text: str):
     """Yield (kind, text) tuples for a user command."""
     # ---- Learned-tool management (/tools, /learned X, /forget-tool X) ----
-        # ---- Learned-tool management (/tools, /learned X, /forget-tool X) ----
     special = slash_commands.handle_special_commands(user_text)
     if special is not None:
         yield ("content", QUIET_PREFIX + special)
@@ -333,6 +332,7 @@ def think_stream(user_text: str):
 
     # LLM streaming
     yield from ask_stream(user_text, execute_tool)
+
 
 def think(user_text: str) -> str:
     """Non-streaming compatibility wrapper for app.py."""
@@ -381,7 +381,7 @@ def main():
 
             remember(user_text, full_reply)
             
-            memory.log_conversation(user_text, full_reply)   # <-- new line
+            memory.log_conversation(user_text, full_reply)
             if not full_reply.startswith(QUIET_PREFIX):
                 speak(full_reply)
 
