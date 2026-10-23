@@ -1,8 +1,8 @@
 # JARVIS
 
-An autonomous AI assistant with voice I/O, tool calling, code execution, browser automation, multi-agent orchestration, and self-extension — JARVIS writes its own tools.
+An autonomous AI assistant with voice I/O, tool calling, code execution, browser automation, multi-agent orchestration, cybersecurity scanning, and self-extension — JARVIS writes its own tools.
 
-Built in Python, JARVIS combines a Groq-powered LLM brain with a growing toolset (55+ built-in, unlimited learned), persistent memory, autonomous experiment mode, and a Stark Industries-style web HUD.
+Built in Python, JARVIS combines a Gemini/Groq-powered LLM brain with a growing toolset (60+ built-in, unlimited learned), persistent memory, autonomous experiment mode, and a Stark Industries-style web HUD.
 
 ![Stark HUD Interface](docs/doc.png)
 
@@ -15,6 +15,7 @@ Built in Python, JARVIS combines a Groq-powered LLM brain with a growing toolset
 - [Project Structure](#project-structure)
 - [Installation](#installation)
 - [Usage](#usage)
+- [Cybersecurity & Kali Linux](#cybersecurity--kali-linux)
 - [Experiment Mode](#experiment-mode)
 - [Self-Extension in Action](#self-extension-in-action)
 - [Memory System](#memory-system)
@@ -36,31 +37,30 @@ Built in Python, JARVIS combines a Groq-powered LLM brain with a growing toolset
 ### Interfaces
 
 - **Terminal** (`jarvis.py`) — type or speak
-- **Web UI** (`app.py`) — Stark Industries-style HUD with an animated arc reactor, live telemetry, streaming transcript, and gold-bordered plan rendering
+- **Web UI** (`app.py`) — Stark Industries-style HUD with an animated arc reactor, live telemetry, streaming transcript, and gold-bordered plan rendering.
+- **Interruptible Speech** — Click the `■ Stop` button, press `Esc`, or send a new command to instantly kill TTS audio mid-sentence.
 
 ### Voice I/O
 
 - Speech-to-text via **Whisper** (`base` model), auto language detection (English + Hindi)
-- Text-to-speech via **edge-tts** (Microsoft neural voice)
+- Text-to-speech via **edge-tts** (Microsoft neural voice) played through `ffplay` for zero-latency interrupts
 - Hybrid input — type commands or use voice
 - Wake word detection (optional) — say "Hey Jarvis"
 
 ### LLM Brain
 
-- **Groq API** (free tier) with multi-model fallback: `openai/gpt-oss-120b` → `openai/gpt-oss-20b` → `qwen/qwen3.8-27b`
+- **Gemini API** (primary) — `gemini-1.5-flash` via OpenAI-compatible endpoint
+- **Groq API** (fallback) — `openai/gpt-oss-120b` → `openai/gpt-oss-20b` → `qwen/qwen3.8-27b`
 - **Ollama** local fallback (`qwen2.5:3b`) for offline use
 - Streaming responses (token-by-token)
 - Autonomous planning — LLM writes a `PLAN:` block for multi-step tasks
-- Up to 8 tool calls per request (loop-protected)
+- Up to 25 tool calls per request (loop-protected)
 - Tool hallucination guard — rejects invalid tool names and retries
-- JSON retry handling for malformed tool calls
-- Groq channel-suffix normalization (strips `.channel` / `commentary` artifacts)
-- Narration detection — catches LLMs that describe tool calls in text instead of emitting them
 - Automatic `TOOLS` reload after `create_tool` succeeds, so new tools are usable in the same session
 
 ### Self-Extension — JARVIS Writes Its Own Tools
 
-This is the headline feature. When you ask JARVIS for something none of its 55+ built-in tools can do, it:
+This is the headline feature. When you ask JARVIS for something none of its built-in tools can do, it:
 
 1. **Recognizes the gap** — the LLM checks the tool list, finds no match
 2. **Writes new Python code** for the tool
@@ -70,7 +70,6 @@ This is the headline feature. When you ask JARVIS for something none of its 55+ 
 6. **Auto-loads it** on every restart, and reloads it mid-session after successful creation
 
 **Example:**
-
 ```text
 You: build a tool that reads a text file and returns the 10 most common words
 JARVIS:
@@ -82,7 +81,6 @@ JARVIS:
 ```
 
 Later:
-
 ```text
 You: what are the most common words in test.txt
 JARVIS: [Calling top_words...]
@@ -92,13 +90,23 @@ JARVIS: [Calling top_words...]
 The tool is permanent. No code writing needed the second time.
 
 **Safety:**
-
 - Every new tool must pass a test before being saved
 - Blocked imports: `os.system`, `subprocess`, `socket`, `eval`, `exec`, `shutil.rmtree`, `requests.post`
 - Function name must match the tool name
 - Manual review via `/learned <name>`
 - Manual delete via `/forget-tool <name>`
-- Everything stays local — nothing uploaded
+
+### Cybersecurity & Kali Linux
+
+JARVIS has hands. Using the `run_terminal_command` tool, he can orchestrate standard cybersecurity tools installed in Kali Linux (via WSL on Windows).
+
+- **Network Scanning:** `wsl nmap -sV 192.168.1.1`
+- **Web Fuzzing:** `wsl gobuster dir -u http://target -w /usr/share/wordlists/...`
+- **Vulnerability Scanning:** `wsl nikto -h http://target`
+- **Exploitation:** `wsl sqlmap -u "http://target/vuln.php?id=1"`
+- **Android Hacking:** `adb shell pm list packages`
+
+JARVIS reads the terminal output, analyzes the vulnerabilities, and summarizes the findings back to you. 
 
 ### Experiment Mode
 
@@ -107,7 +115,6 @@ A different way to use JARVIS. Instead of answering a research question, it desi
 **Pipeline:** QUESTION → HYPOTHESIS → DESIGN → EXECUTE → ANALYZE → CONCLUDE
 
 **Example:**
-
 ```text
 You: investigate whether more training data improves accuracy
 
@@ -127,7 +134,6 @@ JARVIS:
 ```
 
 Each experiment is saved to `experiments/<id>/` with:
-
 - `experiment.json` — hypothesis, variables, code spec
 - `experiment.py` — the runnable script
 - `results.json` — structured results
@@ -136,12 +142,9 @@ Each experiment is saved to `experiments/<id>/` with:
 
 Bounded to 2 LLM calls per experiment (1 planning + 1 analysis), plus one optional follow-up if the result is inconclusive. All execution is deterministic Python.
 
-**Reproducible:** rerun any experiment by running `python experiment.py` in its folder.
-
 ### Anticipation Engine
 
 Learns query patterns and precomputes likely answers during idle time.
-
 - Runs on Ollama (zero cloud tokens)
 - Requires 3+ observations before acting on a pattern
 - Idle-triggered (15 min of no input) + startup catch-up if offline >24h
@@ -151,31 +154,10 @@ Learns query patterns and precomputes likely answers during idle time.
 ### Tool Router
 
 Lightweight keyword-based router that picks relevant tools per request.
-
 - Core tools always sent (weather, search, code, memory)
 - Category-based selection adds tools when keywords match
 - Falls back to full set when uncertain (`load_all_tools` meta-tool)
 - Saves ~2,500 tokens/request on average
-
-### 55+ Built-in Tools Across 12 Categories
-
-| Category | Tools |
-|----------|-------|
-| Intelligence | Weather, Wikipedia, random Wikipedia, web search, news search |
-| Workspace | Send email, open apps (Spotify, Chrome, VS Code, etc.), open websites |
-| Productivity | Screenshot, clipboard read/write, file search, notes, timer, reminders |
-| System | System info (battery, CPU, RAM), public IP |
-| Entertainment | YouTube playback (yt-dlp + mpv), Spotify web player |
-| Utility | Calculator, coin flip, dice roll, morning briefing |
-| Conversion | Unit conversion (length, weight, temperature), currency (live rates) |
-| Language | Translation (30+ languages), PDF text extraction |
-| Code execution | Sandboxed Python — computes, analyzes CSV/JSON, plots data |
-| Screen vision | Analyze screen, read screen text, explain screen errors, translate screen |
-| RAG over files | Index a folder once, then ask questions about your PDFs/notes |
-| Browser automation | Playwright — open URLs, search Google/YouTube, click, type, scrape |
-| Multi-agent | Spawn parallel sub-agents (researcher, coder, writer, planner) |
-| Scheduling | `schedule_task`, `watch_for` — recurring tasks and condition watchers |
-| Self-extension | `create_tool` — write new tools at runtime |
 
 ### Long-term Memory
 
@@ -191,7 +173,6 @@ Tracks what you're doing (active app, window title, idle time, battery, git stat
 ### Recovery Layer
 
 Every tool call is classified on failure:
-
 - **Rate limit** → move to next model
 - **Tool validation failure** → retry same model with a correction prompt
 - **JSON parse error** → retry with a shorter-code instruction
@@ -228,20 +209,20 @@ USER INPUT (voice / typed text / wake word)
         |
         +-- Tool selection (tool_router.py)
         |
-        +-- LLM call (Groq multi-model + Ollama fallback)
+        +-- LLM call (Gemini -> Groq multi-model -> Ollama)
         |
         v
    Recovery + narration detection
         |
         +-- If tool calls -> execute_tool()
         |       |
+        |       +-- terminal_tools.py (WSL/Kali commands)
         |       +-- tools.py, search.py, productivity.py
         |       +-- advanced.py, screen_vision.py, document_rag.py
         |       +-- code_runner.py, browser_control.py
         |       +-- agents.py, memory.py
         |       +-- self_extension.py ---> tools_learned/*.py
         |       +-- experiment.py
-        |       +-- anticipate.py
         |       |
         |       +-- Loop protection + tool-name repeat check
         |
@@ -250,7 +231,7 @@ USER INPUT (voice / typed text / wake word)
         v
    Output
         +-- Streaming text to terminal/HUD
-        +-- voice.py --- edge-tts ---> speech
+        +-- voice.py --- ffplay ---> speech (interruptible)
         +-- Web HUD (Flask + SSE)
 ```
 
@@ -258,9 +239,9 @@ The pipeline flows through seven stages:
 
 1. **Input** — microphone, typed text, or wake word.
 2. **Voice** — Whisper converts speech to text; edge-tts converts text to speech.
-3. **Brain** — Groq multi-model LLM handles streaming, fallback, planning, and recovery. Ollama runs as a local fallback.
+3. **Brain** — Gemini and Groq LLMs handle streaming, fallback, planning, and recovery. Ollama runs as a local fallback.
 4. **Router** — `think_stream()` and `execute_tool()` in `jarvis.py` orchestrate the flow.
-5. **Tools** — twelve tool modules covering intelligence, productivity, code execution, vision, RAG, browser automation, multi-agent orchestration, memory, experiments, and self-extension.
+5. **Tools** — thirteen tool modules covering intelligence, productivity, code execution, vision, RAG, browser automation, cybersecurity, multi-agent orchestration, memory, experiments, and self-extension.
 6. **Learned tools** — `self_extension.py` writes new tools at runtime; they persist in `tools_learned/` and reload automatically.
 7. **Output** — streaming text to the terminal, spoken response via TTS, and the web HUD.
 
@@ -272,8 +253,9 @@ The pipeline flows through seven stages:
 jarvis/
 ├── app.py                 # Flask web server — Stark HUD interface
 ├── jarvis.py              # Main terminal entry point & router
-├── brain.py               # LLM brain: Groq calls, streaming, recovery
+├── brain.py               # LLM brain: Gemini/Groq calls, streaming, recovery
 ├── voice.py               # Speech-to-text & text-to-speech
+├── terminal_tools.py      # Executes WSL/Kali commands safely
 ├── wake_word.py           # Vosk wake word detection
 ├── wake_listener.py       # Wake word listener with browser polling
 ├── input_handler.py       # Hybrid input handling
@@ -317,7 +299,9 @@ jarvis/
 ### Prerequisites
 
 - Python 3.10+
+- **Gemini API key** (free tier at [Google AI Studio](https://aistudio.google.com/app/apikey))
 - **Groq API key** (free tier at [console.groq.com](https://console.groq.com))
+- Optional: **WSL + Kali Linux** (for cybersecurity tools)
 - Optional: **Ollama** for local LLM fallback
 - Optional: **Playwright** browsers for browser automation
 - Optional: **Vosk** model for wake word detection
@@ -356,6 +340,7 @@ jarvis/
    Create a `.env` file in the project root:
 
    ```env
+   GEMINI_API_KEY=your_gemini_api_key_here
    GROQ_API_KEY=your_groq_api_key_here
    # Optional
    OLLAMA_BASE_URL=http://localhost:11434
@@ -415,7 +400,30 @@ Open `http://localhost:5000`.
 "Spawn a researcher and a writer to create a report on quantum computing"
 "build a tool that generates a QR code for any URL"
 "investigate whether more training data improves accuracy"
+"run an nmap scan on my local network using kali"
+"scan http://localhost:3000 with gobuster using the medium wordlist"
 ```
+
+---
+
+## Cybersecurity & Kali Linux
+
+To use JARVIS for network and web security testing, you need Kali Linux installed via WSL (Windows Subsystem for Linux).
+
+1. **Install WSL and Kali:**
+   ```powershell
+   wsl --install -d kali-linux
+   ```
+2. **Open Kali and install the tools:**
+   ```bash
+   sudo apt update && sudo apt install nmap gobuster sqlmap nikto seclists -y
+   ```
+3. **Test the bridge from Windows:**
+   ```bash
+   wsl nmap -h
+   ```
+
+JARVIS will automatically prefix commands with `wsl` to route them into Kali. You can ask him to scan your local network, test demo websites (like `testphp.vulnweb.com`), or run SQLmap against local Docker containers.
 
 ---
 
@@ -446,7 +454,6 @@ experiments/<id>/
 ### Reproducibility
 
 Every experiment records:
-
 - Random seed
 - Dataset source (synthetic if none provided)
 - Model architecture and hyperparameters
@@ -473,7 +480,6 @@ JARVIS:
 ```
 
 Then:
-
 ```text
 You: what are the most common words in test.txt
 JARVIS: [Calling top_words...]
@@ -522,7 +528,6 @@ JARVIS stores long-term memory in a local SQLite database (`memory.db`).
 - **Session memory** — in-context recall for "repeat that" or "what did I just ask".
 
 Slash commands:
-
 - `/remember <fact>` — store a fact
 - `/memory` — list stored facts
 - `/forget <fact>` — remove a fact
@@ -537,6 +542,7 @@ Slash commands:
 |--------|-------------|
 | `tools.py` | Central registry and dispatcher |
 | `search.py` | Web search, news, Wikipedia, weather |
+| `terminal_tools.py` | Executes WSL/Kali security tools |
 | `productivity.py` | Screenshot, clipboard, file search, notes, timer |
 | `advanced.py` | Unit conversion, currency, translation, PDF |
 | `screen_vision.py` | Screen analysis using Qwen vision model |
@@ -555,14 +561,12 @@ Slash commands:
 ## Multi-Agent Orchestration
 
 JARVIS can spawn parallel sub-agents:
-
 - **Researcher** — gathers information from the web and local files.
 - **Coder** — writes and executes code in a sandbox.
 - **Writer** — composes reports, summaries, and creative content.
 - **Planner** — breaks down large goals into actionable steps.
 
 Example:
-
 > "Spawn a researcher and a writer to create a report on the latest advances in fusion energy."
 
 ---
@@ -624,11 +628,11 @@ Defined in `recovery.py`. Correction prompts are stored in a `CORRECTIONS` dict 
 
 ## Known Limitations
 
-- **Groq free tier** is limited to ~8,000 tokens/minute per model. A full JARVIS request (55+ tool schemas + system prompt + context) consumes ~7,500 tokens, so the free tier allows roughly one request per minute. Ollama runs as a fallback with no rate limits, but with lower quality on complex tool-calling tasks.
-- **Small local models** (1B–3B) cannot reliably produce structured tool calls. Tool creation specifically requires `gpt-oss-120b` (Groq) or a 7B+ local model.
-- **Browser automation** uses Playwright's persistent profile in `.browser_profile/`. Logins must be done once, manually. The folder is gitignored — never committed.
-- **Sandbox** is keyword-based (blocks `os.system`, `subprocess`, etc.) and not a full security boundary. Suitable for personal use, not public deployment.
-- **Experiment Mode** uses synthetic data when no dataset is provided. Real experiments on real data require passing a dataset path.
+- **Free Tier Limits:** Gemini allows ~15 requests/min, Groq allows ~30 requests/min. A full JARVIS request consumes ~7,500 tokens, so heavy usage will hit rate limits. Fallback ensures he keeps working.
+- **Windows Defender:** Security tools (like Nikto) are often flagged as false-positive "HackTools". Running them inside WSL/Kali bypasses this entirely.
+- **Browser automation** uses Playwright's persistent profile in `.browser_profile/`. Logins must be done once, manually. The folder is gitignored.
+- **Sandbox** is keyword-based (blocks `os.system`, `subprocess`, etc.) and not a full security boundary.
+- **Experiment Mode** uses synthetic data when no dataset is provided.
 
 ---
 
@@ -645,7 +649,7 @@ Core dependencies (see `requirements.txt`):
 - `psutil` — system info
 - `flask` — web HUD
 - `pyperclip`, `pyautogui` — clipboard and screen automation
-- `openai` — Groq + Ollama API client
+- `openai` — Gemini/Groq/Ollama API client
 - `vosk` — wake word detection
 - `playwright` — browser automation
 - `chromadb`, `sentence-transformers` — RAG embeddings
@@ -672,10 +676,12 @@ MIT License — use, modify, and extend freely. See [LICENSE](LICENSE) for detai
 
 ## Acknowledgements
 
-- [Groq](https://groq.com) for fast LLM inference.
+- [Google AI Studio](https://aistudio.google.com) for the Gemini API.
+- [Groq](https://groq.com) for blazing-fast LLM inference.
 - [OpenAI Whisper](https://github.com/openai/whisper) for speech recognition.
 - [edge-tts](https://github.com/rany2/edge-tts) for neural text-to-speech.
 - [Playwright](https://playwright.dev) for browser automation.
+- [Kali Linux](https://www.kali.org/) for the cybersecurity toolchain.
 - [Vosk](https://alphacephei.com/vosk/) for offline wake word detection.
 - [ChromaDB](https://www.trychroma.com/) for embeddings.
 - [Ollama](https://ollama.com) for local model inference.
